@@ -1,0 +1,1305 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width,
+                 initial-scale=1.0,
+                 maximum-scale=1.0,
+                 user-scalable=no"
+    >
+
+    <meta
+        name="theme-color"
+        content="#080a0f"
+    >
+
+    <title>CreatorOS</title>
+
+    <link
+        rel="stylesheet"
+        href="/static/app.css"
+    >
+
+</head>
+
+<body>
+
+<!-- ========================================================
+     APP
+========================================================= -->
+
+<div id="app">
+
+    <!-- ====================================================
+         TOP BAR
+    ===================================================== -->
+
+    <header class="topbar">
+
+        <div class="brand">
+            <img
+                class="brand-logo"
+                src="/static/logo.png"
+                alt="Creator OS"
+            >
+        
+            <div class="brand-name">
+                CreatorOS
+            </div>
+        </div>
+
+        <div class="top-actions">
+
+            <button
+                class="icon-button"
+                id="searchTopButton"
+                aria-label="Search"
+            >
+                🔍
+            </button>
+
+            <button
+                class="icon-button"
+                id="profileTopButton"
+                aria-label="Profile"
+            >
+                👤
+            </button>
+
+        </div>
+
+    </header>
+
+
+    <!-- ====================================================
+         MAIN CONTENT
+    ===================================================== -->
+
+    <main id="mainContent">
+
+
+        <!-- ================================================
+             HOME
+        ================================================= -->
+
+        <section
+            id="homeScreen"
+            class="screen active"
+        >
+
+            <div class="feed-tabs">
+
+                <button
+                    class="feed-tab active"
+                    data-feed="for-you"
+                >
+                    For You
+                </button>
+
+                <button
+                    class="feed-tab"
+                    data-feed="following"
+                >
+                    Following
+                </button>
+
+                <button
+                    class="feed-tab"
+                    data-feed="trending"
+                >
+                    Trending
+                </button>
+
+            </div>
+
+            <div
+                id="videoFeed"
+                class="video-feed"
+            >
+
+                <div class="loading-box">
+
+                    <div class="loading-spinner"></div>
+
+                    <div>
+                        Loading videos...
+                    </div>
+
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- ================================================
+             SEARCH
+        ================================================= -->
+
+        <section
+            id="searchScreen"
+            class="screen"
+        >
+
+            <div class="page-header">
+
+                <button
+                    class="back-button"
+                    id="searchBackButton"
+                >
+                    ←
+                </button>
+
+                <h1>
+                    Search
+                </h1>
+
+            </div>
+
+            <div class="search-box">
+
+                <input
+                    id="searchInput"
+                    type="search"
+                    placeholder="Search videos or creators"
+                    autocomplete="off"
+                >
+
+                <button
+                    id="searchButton"
+                >
+                    🔍
+                </button>
+
+            </div>
+
+            <div
+                id="searchResults"
+                class="video-feed"
+            >
+
+                <div class="empty-box">
+                    Search for something to get started.
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- ================================================
+             PLAYER
+        ================================================= -->
+
+        <section
+            id="playerScreen"
+            class="screen"
+        >
+
+            <div class="page-header">
+
+                <button
+                    class="back-button"
+                    id="playerBackButton"
+                >
+                    ←
+                </button>
+
+                <h1 id="playerHeaderTitle">
+                    Video
+                </h1>
+
+            </div>
+
+            <div class="player-container">
+
+                <video
+                    id="mainVideo"
+                    controls
+                    playsinline
+                    preload="metadata"
+                ></video>
+
+            </div>
+
+            <div class="player-details">
+
+                <h2 id="playerTitle">
+                    Video
+                </h2>
+
+                <div
+                    id="playerCreator"
+                    class="creator-line"
+                >
+                    @creator
+                </div>
+
+                <div
+                    id="playerStats"
+                    class="stats-line"
+                >
+                    👁 0 &nbsp;&nbsp;
+                    ❤️ 0 &nbsp;&nbsp;
+                    💬 0
+                </div>
+
+                <div class="action-row">
+
+                    <button
+                        class="action-button"
+                        id="likeButton"
+                    >
+                        ❤️ Like
+                    </button>
+
+                    <button
+                        class="action-button"
+                        id="commentButton"
+                    >
+                        💬 Comment
+                    </button>
+
+                    <button
+                        class="action-button"
+                        id="shareButton"
+                    >
+                        ↗ Share
+                    </button>
+
+                </div>
+
+                <div
+                    id="playerDescription"
+                    class="description"
+                ></div>
+
+            </div>
+
+            <div
+                id="commentsPanel"
+                class="comments-panel hidden"
+            >
+
+                <h3>
+                    Comments
+                </h3>
+
+                <div
+                    id="commentsList"
+                    class="comments-list"
+                ></div>
+
+                <div class="comment-input-row">
+
+                    <input
+                        id="commentInput"
+                        type="text"
+                        placeholder="Write a comment..."
+                        maxlength="1000"
+                    >
+
+                    <button id="sendCommentButton">
+                        Send
+                    </button>
+
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- ================================================
+             CREATE / UPLOAD
+        ================================================= -->
+
+        <section
+            id="createScreen"
+            class="screen"
+        >
+
+            <div class="page-header">
+
+                <h1>
+                    Create
+                </h1>
+
+            </div>
+
+            <div class="create-container">
+
+                <div class="create-title">
+                    Upload your video 🚀
+                </div>
+
+                <div class="create-subtitle">
+                    Your first step toward becoming a creator.
+                </div>
+
+                <label class="upload-area">
+
+                    <input
+                        type="file"
+                        id="videoFileInput"
+                        accept="video/*"
+                        hidden
+                    >
+
+                    <div class="upload-icon">
+                        📹
+                    </div>
+
+                    <div class="upload-main-text">
+                        Choose a video
+                    </div>
+
+                    <div
+                        id="selectedFileText"
+                        class="upload-small-text"
+                    >
+                        MP4, WebM, MOV and other video formats
+                    </div>
+
+                </label>
+
+                <input
+                    id="videoTitleInput"
+                    class="form-input"
+                    type="text"
+                    placeholder="Video title"
+                    maxlength="150"
+                >
+
+                <textarea
+                    id="videoDescriptionInput"
+                    class="form-input textarea"
+                    placeholder="Description"
+                    maxlength="2000"
+                ></textarea>
+
+                <!-- =================================================
+                    THUMBNAIL
+                ================================================= -->
+
+                <label class="thumbnail-upload-area">
+
+                    <input
+                        type="file"
+                        id="thumbnailFileInput"
+                        accept="image/jpeg,image/png,image/webp"
+                        hidden
+                    >
+
+                    <div class="thumbnail-icon">
+                        🖼️
+                    </div>
+
+                    <div class="thumbnail-main-text">
+                        Add Thumbnail
+                    </div>
+
+                    <div
+                        id="thumbnailFileText"
+                        class="upload-small-text"
+                    >
+                        Optional — JPG, PNG or WebP
+                    </div>
+
+                </label>
+
+                <div
+                    id="thumbnailPreview"
+                    class="thumbnail-preview hidden"
+                >
+                    <img
+                        id="thumbnailPreviewImage"
+                        src=""
+                        alt="Thumbnail preview"
+                    >
+                </div>
+
+                <div class="upload-progress hidden">
+
+                    <div class="progress-track">
+
+                        <div
+                            id="uploadProgressBar"
+                            class="progress-bar"
+                        ></div>
+
+                    </div>
+
+                    <div
+                        id="uploadProgressText"
+                        class="progress-text"
+                    >
+                        Uploading...
+                    </div>
+
+                </div>
+
+                <button
+                    id="uploadVideoButton"
+                    class="primary-button"
+                >
+                    🚀 Upload Video
+                </button>
+
+                <div
+                    id="uploadStatus"
+                    class="status-text"
+                ></div>
+
+            </div>
+
+        </section>
+
+
+        <!-- ================================================
+             NOTIFICATIONS
+        ================================================= -->
+
+        <section
+            id="notificationsScreen"
+            class="screen"
+        >
+
+            <div class="page-header">
+
+                <h1>
+                    Notifications
+                </h1>
+            
+                <button
+                    id="markNotificationsRead"
+                    class="small-header-button"
+                >
+                    Mark read
+                </button>
+            
+            </div>
+            
+            <div
+                id="notificationsList"
+                class="notifications-list"
+            >
+            
+                <div class="loading-box">
+            
+                    <div class="loading-spinner"></div>
+            
+                    <div>
+                        Loading notifications...
+                    </div>
+            
+                </div>
+            
+            </div>
+
+        </section>
+
+
+        <!-- ================================================
+             PROFILE
+        ================================================= -->
+
+        <section
+            id="profileScreen"
+            class="screen"
+        >
+
+            <div class="profile-header">
+
+                <div class="profile-avatar">
+                    👤
+                </div>
+
+                <div
+                    id="profileUsername"
+                    class="profile-username"
+                >
+                    @guest
+                </div>
+
+                <div
+                    id="profileDisplayName"
+                    class="profile-display-name"
+                >
+                    Guest
+                </div>
+
+                <div
+                    id="profileBio"
+                    class="profile-bio"
+                >
+                    Login to see your creator profile.
+                </div>
+
+            </div>
+
+            <div class="profile-stats">
+
+                <div class="profile-stat">
+
+                    <strong id="profileVideos">
+                        0
+                    </strong>
+
+                    <span>
+                        Videos
+                    </span>
+
+                </div>
+
+                <div class="profile-stat">
+
+                    <strong id="profileFollowers">
+                        0
+                    </strong>
+
+                    <span>
+                        Followers
+                    </span>
+
+                </div>
+
+                <div class="profile-stat">
+
+                    <strong id="profileFollowing">
+                        0
+                    </strong>
+
+                    <span>
+                        Following
+                    </span>
+
+                </div>
+
+            </div>
+
+            <button
+                id="profileLoginButton"
+                class="primary-button"
+            >
+                LOGIN
+            </button>
+
+            <button
+                id="openStudioButton"
+                class="secondary-button"
+            >
+                📊 Creator Studio
+            </button>
+
+            <div
+                id="profileVideosList"
+                class="video-feed"
+            ></div>
+
+        </section>
+
+          
+        <!-- ====================================================
+            CREATOR STUDIO
+        ===================================================== -->
+
+        <section
+        id="studioScreen"
+        class="screen"
+        >
+
+        <div class="page-header">
+
+            <button
+                class="back-button"
+                id="studioBackButton"
+            >
+                ←
+            </button>
+
+            <h1>
+                Creator Studio
+            </h1>
+
+        </div>
+
+
+        <div class="studio-container">
+
+            <div class="studio-welcome">
+
+                <div class="studio-icon">
+                    📊
+                </div>
+
+                <div>
+
+                    <div class="studio-title">
+                        Creator Studio
+                    </div>
+
+                    <div class="studio-subtitle">
+                        Track how your content is growing.
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <!-- =====================================================
+                CREATOR BOOST
+            ===================================================== -->
+
+            <div class="boost-card">
+
+                <div class="boost-header">
+
+                    <div>
+
+                        <div class="boost-title">
+                            🚀 Creator Boost
+                        </div>
+
+                        <div class="boost-subtitle">
+                            Your growth and discovery score
+                        </div>
+
+                    </div>
+
+                    <div
+                        id="boostLevel"
+                        class="boost-level"
+                    >
+                        🌱 New Creator
+                    </div>
+
+                </div>
+
+
+                <div class="boost-score-row">
+
+                    <div
+                        id="boostScore"
+                        class="boost-score"
+                    >
+                        0
+                    </div>
+
+                    <div class="boost-score-label">
+                        Boost Score
+                    </div>
+
+                </div>
+
+
+                <div class="boost-progress">
+
+                    <div class="boost-progress-track">
+
+                        <div
+                            id="boostProgressBar"
+                            class="boost-progress-bar"
+                        ></div>
+
+                    </div>
+
+                    <div
+                        id="boostNextText"
+                        class="boost-next-text"
+                    >
+                        Keep creating!
+                    </div>
+
+                </div>
+
+
+                <div
+                    id="boostBestVideo"
+                    class="boost-best-video"
+                >
+
+                    <strong>
+                        🔥 Best performing video
+                    </strong>
+
+                    <div>
+                        No data yet.
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <!-- =================================================
+                ANALYTICS
+            ================================================== -->
+
+            <div class="analytics-grid">
+
+                <div class="analytics-card">
+
+                    <div class="analytics-icon">
+                        🎬
+                    </div>
+
+                    <strong id="studioVideos">
+                        0
+                    </strong>
+
+                    <span>
+                        Videos
+                    </span>
+
+                </div>
+
+
+                <div class="analytics-card">
+
+                    <div class="analytics-icon">
+                        👁
+                    </div>
+
+                    <strong id="studioViews">
+                        0
+                    </strong>
+
+                    <span>
+                        Views
+                    </span>
+
+                </div>
+
+
+                <div class="analytics-card">
+
+                    <div class="analytics-icon">
+                        ❤️
+                    </div>
+
+                    <strong id="studioLikes">
+                        0
+                    </strong>
+
+                    <span>
+                        Likes
+                    </span>
+
+                </div>
+
+
+                <div class="analytics-card">
+
+                    <div class="analytics-icon">
+                        👥
+                    </div>
+
+                    <strong id="studioFollowers">
+                        0
+                    </strong>
+
+                    <span>
+                        Followers
+                    </span>
+
+                </div>
+
+            </div>
+
+
+            <!-- =================================================
+                CREATE BUTTON
+            ================================================== -->
+
+            <button
+                id="studioUploadButton"
+                class="primary-button"
+            >
+                ➕ Upload New Video
+            </button>
+
+
+            <!-- =================================================
+                YOUR VIDEOS
+            ================================================== -->
+
+            <div class="studio-section-title">
+
+                Your Videos
+
+            </div>
+
+            <div
+                id="studioVideosList"
+                class="studio-video-list"
+            ></div>
+
+        </div>
+
+        </section>
+
+         
+        <!-- ====================================================
+            SHORTS
+        ===================================================== -->
+
+        <section
+        id="shortsScreen"
+        class="screen shorts-screen"
+        >
+
+        <div class="shorts-header">
+
+            <button
+                class="shorts-back-button"
+                id="shortsBackButton"
+            >
+                ←
+            </button>
+
+            <div class="shorts-title">
+                Shorts
+            </div>
+
+            <div class="shorts-header-spacer"></div>
+
+        </div>
+
+        <div
+            id="shortsFeed"
+            class="shorts-feed"
+        >
+
+            <div class="shorts-loading">
+
+                <div class="loading-spinner"></div>
+
+                <div>
+                    Loading Shorts...
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <!-- SHORT COMMENTS -->
+
+        <div
+            id="shortCommentsPanel"
+            class="short-comments-panel hidden"
+        >
+
+            <div class="short-comments-header">
+
+                <strong>
+                    Comments
+                </strong>
+
+                <button
+                    id="closeShortComments"
+                >
+                    ✕
+                </button>
+
+            </div>
+
+            <div
+                id="shortCommentsList"
+                class="short-comments-list"
+            ></div>
+
+            <div class="short-comment-input-row">
+
+                <input
+                    id="shortCommentInput"
+                    type="text"
+                    placeholder="Write a comment..."
+                    maxlength="1000"
+                >
+
+                <button
+                    id="sendShortComment"
+                >
+                    Send
+                </button>
+
+            </div>
+
+        </div>
+
+        </section>
+
+        <!-- ====================================================
+            PUBLIC CREATOR PROFILE
+        ===================================================== -->
+
+        <section
+        id="creatorProfileScreen"
+        class="screen"
+        >
+
+        <div class="page-header">
+
+            <button
+                class="back-button"
+                id="creatorProfileBackButton"
+            >
+                ←
+            </button>
+
+            <h1>
+                Creator
+            </h1>
+
+        </div>
+
+
+        <div class="public-profile-header">
+
+            <div
+                id="creatorProfileAvatar"
+                class="public-profile-avatar"
+            >
+                👤
+            </div>
+
+            <div
+                id="creatorProfileUsername"
+                class="public-profile-username"
+            >
+                @creator
+            </div>
+
+            <div
+                id="creatorProfileDisplayName"
+                class="public-profile-display-name"
+            >
+                Creator
+            </div>
+
+            <div
+                id="creatorProfileBio"
+                class="public-profile-bio"
+            >
+                No bio yet.
+            </div>
+
+
+            <div class="public-profile-stats">
+
+                <div>
+
+                    <strong
+                        id="creatorProfileVideos"
+                    >
+                        0
+                    </strong>
+
+                    <span>
+                        Videos
+                    </span>
+
+                </div>
+
+                <div>
+
+                    <strong
+                        id="creatorProfileFollowers"
+                    >
+                        0
+                    </strong>
+
+                    <span>
+                        Followers
+                    </span>
+
+                </div>
+
+                <div>
+
+                    <strong
+                        id="creatorProfileFollowing"
+                    >
+                        0
+                    </strong>
+
+                    <span>
+                        Following
+                    </span>
+
+                </div>
+
+            </div>
+
+
+            <button
+                id="creatorFollowButton"
+                class="primary-button"
+            >
+                Follow
+            </button>
+
+        </div>
+
+
+        <div class="public-profile-section-title">
+            Videos
+        </div>
+
+        <div
+            id="creatorProfileVideos"
+            class="video-feed"
+        ></div>
+
+        </section>
+
+        <!-- ================================================
+             LOGIN
+        ================================================= -->
+
+        <section
+            id="loginScreen"
+            class="screen auth-screen"
+        >
+
+            <div class="auth-card">
+
+                <div class="auth-logo">
+                    🎬
+                </div>
+
+                <h1>
+                    Welcome back
+                </h1>
+
+                <p>
+                    Login to your creator account.
+                </p>
+
+                <input
+                    id="loginValue"
+                    class="form-input"
+                    type="text"
+                    placeholder="Username or email"
+                >
+
+                <input
+                    id="loginPassword"
+                    class="form-input"
+                    type="password"
+                    placeholder="Password"
+                >
+
+                <button
+                    id="loginButton"
+                    class="primary-button"
+                >
+                    LOGIN
+                </button>
+
+                <button
+                    id="openRegisterButton"
+                    class="secondary-button"
+                >
+                    Create new account
+                </button>
+
+                <div
+                    id="loginStatus"
+                    class="status-text"
+                ></div>
+
+            </div>
+
+        </section>
+
+
+        <!-- ================================================
+             REGISTER
+        ================================================= -->
+
+        <section
+            id="registerScreen"
+            class="screen auth-screen"
+        >
+
+            <div class="auth-card">
+
+                <div class="auth-logo">
+                    🚀
+                </div>
+
+                <h1>
+                    Become a creator
+                </h1>
+
+                <p>
+                    Create your free account.
+                </p>
+
+                <input
+                    id="registerUsername"
+                    class="form-input"
+                    type="text"
+                    placeholder="Username"
+                >
+
+                <input
+                    id="registerEmail"
+                    class="form-input"
+                    type="email"
+                    placeholder="Email"
+                >
+
+                <input
+                    id="registerDisplayName"
+                    class="form-input"
+                    type="text"
+                    placeholder="Display name"
+                >
+
+                <input
+                    id="registerPassword"
+                    class="form-input"
+                    type="password"
+                    placeholder="Password"
+                >
+
+                <button
+                    id="registerButton"
+                    class="primary-button"
+                >
+                    CREATE ACCOUNT
+                </button>
+
+                <button
+                    id="openLoginButton"
+                    class="secondary-button"
+                >
+                    Already have an account?
+                </button>
+
+                <div
+                    id="registerStatus"
+                    class="status-text"
+                ></div>
+
+            </div>
+
+        </section>
+
+    </main>
+
+
+    <!-- ====================================================
+         BOTTOM NAVIGATION
+    ===================================================== -->
+
+    <nav class="bottom-nav">
+
+        <button
+            class="nav-button active"
+            data-screen="home"
+        >
+
+            <span class="nav-icon">
+                🏠
+            </span>
+
+            <span>
+                Home
+            </span>
+
+        </button>
+
+
+        <button
+            class="nav-button"
+            data-screen="shorts"
+            id="shortsNavButton"
+        >
+
+            <span class="nav-icon">
+                🎬
+            </span>
+
+            <span>
+                Shorts
+            </span>
+
+        </button>
+
+
+        <button
+            class="nav-create-button"
+            data-screen="create"
+        >
+
+            <span>
+                ＋
+            </span>
+
+        </button>
+
+
+        <button
+            class="nav-button"
+            data-screen="notifications"
+        >
+
+            <span class="nav-icon">
+                🔔
+            </span>
+
+            <span>
+                Alerts
+            </span>
+
+        </button>
+
+
+        <button
+            class="nav-button"
+            data-screen="profile"
+        >
+
+            <span class="nav-icon">
+                👤
+            </span>
+
+            <span>
+                Profile
+            </span>
+
+        </button>
+
+    </nav>
+
+
+    <!-- ====================================================
+         TOAST
+    ===================================================== -->
+
+    <div
+        id="toast"
+        class="toast"
+    ></div>
+
+</div>
+
+
+<script
+    src="/static/app.js"
+></script>
+
+</body>
+
+</html>
