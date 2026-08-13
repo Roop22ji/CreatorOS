@@ -745,7 +745,7 @@ function createVideoCard(
         }}
 
             <div class="video-play">
-                ▶
+                #▶
             </div>
 
         </div>
