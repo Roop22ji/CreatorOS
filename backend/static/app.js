@@ -671,11 +671,20 @@ function createVideoCard(
             : "";
 
     const thumbnail =
-        video.thumbnail
-            ? api(
-                video.thumbnail
-            )
-            : "";
+        video.source === "youtube"
+        ?
+        `https://img.youtube.com/vi/${video.youtube_id}/hqdefault.jpg`
+        :
+        (
+            video.thumbnail
+            ?
+            api(video.thumbnail)
+            :
+            ""
+        );
+
+    const isYouTube =
+        video.source === "youtube";
 
     card.innerHTML = `
         
@@ -693,6 +702,8 @@ function createVideoCard(
         <div
             class="video-preview"
             data-video-id="${video.id}"
+            data-source="${video.source || 'creator'}"
+            data-youtube-id="${video.youtube_id || ''}"
         >
 
         ${
@@ -802,9 +813,21 @@ function createVideoCard(
             ".video-preview"
         );
 
+    if(
+        isYouTube &&
+        video.youtube_id
+    ){
+    
+        preview.dataset.youtube =
+            video.youtube_id;
+    
+    }
+
     preview.addEventListener(
         "click",
         () => {
+
+            console.log("CLICK DATA FULL", JSON.stringify(video, null, 2));
 
             openVideo(
                 video
@@ -842,6 +865,58 @@ function createVideoCard(
 }
 
 
+async function enterVideoFullscreen(element) {
+
+    if (!element) {
+        return;
+    }
+
+    try {
+
+        if (element.requestFullscreen) {
+
+            await element.requestFullscreen();
+
+        } 
+        else if (element.webkitRequestFullscreen) {
+
+            await element.webkitRequestFullscreen();
+
+        }
+
+
+        if (screen.orientation) {
+
+            try {
+
+                await screen.orientation.lock(
+                    "landscape"
+                );
+
+            } catch(error) {
+
+                console.log(
+                    "Orientation lock unavailable",
+                    error
+                );
+
+            }
+
+        }
+
+    } catch(error) {
+
+        console.log(
+            "Fullscreen error:",
+            error
+        );
+
+    }
+
+}
+
+
+
 /* =========================================================
    OPEN VIDEO
 ========================================================= */
@@ -850,8 +925,18 @@ async function openVideo(
     video
 ) {
 
+    console.log("VIDEO DATA:", video);
+
     state.currentVideo =
         video;
+
+    if(video.source === "youtube"){
+
+        openYoutubeVideo(video);
+
+        return;
+
+    }
 
     let finalVideo =
         video;
@@ -903,7 +988,26 @@ async function openVideo(
     player.src =
         videoUrl;
 
+
+
     player.load();
+
+
+    showScreen(
+        "player"
+    );
+
+
+    // Open fullscreen on mobile
+    setTimeout(() => {
+
+        enterVideoFullscreen(
+            player
+        );
+
+    }, 300);
+
+
 
     $("#playerHeaderTitle")
         .textContent =
@@ -957,6 +1061,167 @@ async function openVideo(
     );
 
 }
+
+
+async function enterVideoFullscreen(element) {
+
+    if (!element) {
+        return;
+    }
+
+    try {
+
+        if (element.requestFullscreen) {
+
+            await element.requestFullscreen();
+
+        } 
+        else if (element.webkitRequestFullscreen) {
+
+            await element.webkitRequestFullscreen();
+
+        }
+
+
+        if (screen.orientation) {
+
+            try {
+
+                await screen.orientation.lock(
+                    "landscape"
+                );
+
+            } catch(error) {
+
+                console.log(
+                    "Orientation lock not supported"
+                );
+
+            }
+
+        }
+
+    } catch(error) {
+
+        console.log(
+            "Fullscreen error:",
+            error
+        );
+
+    }
+
+}
+
+
+function openYoutubeVideo(video){
+
+    state.currentVideo =
+        video;
+
+
+    const player =
+        $("#mainVideo");
+
+
+    player.style.display =
+        "none";
+
+
+    let iframe =
+        document.querySelector(
+            "#youtubePlayer"
+        );
+
+
+    if(!iframe){
+
+        iframe =
+            document.createElement(
+                "iframe"
+            );
+
+        iframe.id =
+            "youtubePlayer";
+
+        iframe.width =
+            "100%";
+
+        iframe.height =
+            "100%";
+
+        iframe.frameBorder =
+            "0";
+
+        iframe.allowFullscreen =
+            true;
+
+        iframe.allow =
+        "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture";
+        
+        iframe.referrerPolicy =
+            "strict-origin-when-cross-origin";
+
+
+        player.parentElement.appendChild(
+            iframe
+        );
+
+    }
+
+
+    iframe.src =
+        "https://www.youtube.com/embed/" +
+        video.youtube_id +
+        "?enablejsapi=1&origin=" +
+        encodeURIComponent(window.location.origin);
+
+    $("#playerHeaderTitle")
+        .textContent =
+        video.title ||
+        "YouTube Video";
+
+
+    $("#playerTitle")
+        .textContent =
+        video.title ||
+        "YouTube Video";
+
+
+    const creator =
+        video.creator || {};
+
+
+    $("#playerCreator")
+        .textContent =
+        "@" +
+        (
+            creator.username ||
+            "youtube"
+        );
+
+
+    $("#playerDescription")
+        .textContent =
+        video.description ||
+        "";
+
+
+    showScreen(
+        "player"
+    );
+    
+    
+    // fullscreen YouTube player
+    setTimeout(() => {
+    
+        enterVideoFullscreen(
+            iframe
+        );
+    
+    }, 500);
+
+}
+
 
 
 /* =========================================================
