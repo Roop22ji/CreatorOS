@@ -90,7 +90,7 @@ def initialize_database():
 
             comments_count INTEGER DEFAULT 0,
 
-            source TEXT DEFAULT 'upload',
+            source TEXT DEFAULT 'creator',
 
             youtube_id TEXT,
 
@@ -121,6 +121,13 @@ def initialize_database():
         column["name"]
         for column in video_columns
     ]
+
+    if "source" not in video_column_names:
+
+        cursor.execute("""
+            ALTER TABLE videos
+            ADD COLUMN source TEXT DEFAULT 'creator'
+        """)
 
     if "video_type" not in video_column_names:
 
