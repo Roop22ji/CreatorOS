@@ -559,7 +559,7 @@ async function loadForYouFeed() {
             <div class="empty-box">
 
                 <div>
-                    ❌
+                    
                 </div>
 
                 <div>
