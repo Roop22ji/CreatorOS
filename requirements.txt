@@ -1,30 +1,14 @@
 Flask
 flask-cors
 gunicorn
-
-numpy<2
-opencv-python-headless
-
+numpy==1.26.4
+opencv-python-headless==4.10.0.84
 Pillow
-
 requests
 python-dotenv
-
 Werkzeug
-
-# Video / image handling
-imageio
-imageio-ffmpeg
-
-# API / authentication utilities
-PyJWT
-
-# Database
 SQLAlchemy
 Flask-SQLAlchemy
-
-# File uploads
-python-multipart
-
-# Production utilities
-urllib3
+imageio
+imageio-ffmpeg
+PyJWT
