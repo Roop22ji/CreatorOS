@@ -706,7 +706,7 @@ function createVideoCard(
             data-youtube-id="${video.youtube_id || ''}"
         >
 
-        ${
+        ${{
             thumbnail
             ? `
                 <img
@@ -738,7 +738,7 @@ function createVideoCard(
         
                 </div>
             `
-        }
+        }}
 
             <div class="video-play">
                 ▶
