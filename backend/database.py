@@ -122,6 +122,21 @@ def initialize_database():
         for column in video_columns
     ]
 
+    if "youtube_id" not in video_column_names:
+
+        cursor.execute("""
+            ALTER TABLE videos
+            ADD COLUMN youtube_id TEXT
+        """)
+
+
+    if "youtube_url" not in video_column_names:
+
+        cursor.execute("""
+            ALTER TABLE videos
+            ADD COLUMN youtube_url TEXT
+        """)
+
     if "source" not in video_column_names:
 
         cursor.execute("""
