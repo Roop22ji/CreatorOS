@@ -82,6 +82,8 @@ def initialize_database():
 
             thumbnail TEXT DEFAULT '',
 
+            video_type TEXT DEFAULT 'video',
+
             views INTEGER DEFAULT 0,
 
             likes INTEGER DEFAULT 0,
@@ -90,6 +92,8 @@ def initialize_database():
 
             visibility TEXT DEFAULT 'public',
 
+            is_short INTEGER DEFAULT 0,
+
             created_at INTEGER NOT NULL,
 
             FOREIGN KEY(user_id)
@@ -97,6 +101,35 @@ def initialize_database():
                 ON DELETE CASCADE
         )
     """)
+    
+
+    # ========================================================
+    # VIDEO TYPE MIGRATION
+    # ========================================================
+
+    video_columns = cursor.execute(
+        "PRAGMA table_info(videos)"
+    ).fetchall()
+
+    video_column_names = [
+        column["name"]
+        for column in video_columns
+    ]
+
+    if "video_type" not in video_column_names:
+
+        cursor.execute("""
+            ALTER TABLE videos
+            ADD COLUMN video_type TEXT DEFAULT 'video'
+        """)
+
+        cursor.execute("""
+            UPDATE videos
+            SET video_type = 'video'
+            WHERE video_type IS NULL
+            OR video_type = ''
+        """)
+
 
     # ========================================================
     # LIKES
@@ -297,6 +330,28 @@ def initialize_database():
         idx_followers_following
         ON followers(following_id)
     """)
+
+    # ========================================================
+    # ADD is_short COLUMN TO EXISTING DATABASE
+    # ========================================================
+
+    columns = connection.execute(
+        "PRAGMA table_info(videos)"
+    ).fetchall()
+
+    column_names = [
+        column["name"]
+        for column in columns
+    ]
+
+    if "is_short" not in column_names:
+
+        connection.execute(
+            """
+            ALTER TABLE videos
+            ADD COLUMN is_short INTEGER DEFAULT 0
+            """
+        )
 
     connection.commit()
 
