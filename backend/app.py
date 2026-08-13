@@ -693,7 +693,7 @@ function createVideoCard(
             video.boosted
             ? `
                 <div class="boosted-label">
-                    🚀 Creator Boost
+                    #🚀 Creator Boost
                 </div>
             `
             : ""
