@@ -471,7 +471,7 @@ async function loadFeed() {
         container.innerHTML = `
             <div class="empty-box">
                 <div>
-                    ❌
+                    
                 </div>
 
                 <div>
