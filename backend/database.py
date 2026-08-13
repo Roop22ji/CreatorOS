@@ -364,6 +364,40 @@ def initialize_database():
     connection.close()
 
 
+
+    # ============================================================
+    # ADD SOURCE COLUMN FOR VIDEO ORIGIN
+    # ============================================================
+
+    columns = connection.execute(
+        "PRAGMA table_info(videos)"
+    ).fetchall()
+
+    column_names = [
+        column["name"]
+        for column in columns
+    ]
+
+    if "source" not in column_names:
+
+        connection.execute(
+            """
+            ALTER TABLE videos
+            ADD COLUMN source TEXT DEFAULT 'local'
+            """
+        )
+
+        connection.execute(
+            """
+            UPDATE videos
+            SET source = 'local'
+            WHERE source IS NULL
+            OR source = ''
+            """
+        )
+
+
+
 # ============================================================
 # DATABASE TEST
 # ============================================================
