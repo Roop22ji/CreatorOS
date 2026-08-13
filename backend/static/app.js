@@ -1830,7 +1830,7 @@ function setupUpload() {
 /* =========================================================
    VIDEO UPLOAD WITH PROGRESS
 ========================================================= */
-
+let isShort = false;
 function uploadVideo() {
 
     if (
@@ -1894,6 +1894,21 @@ function uploadVideo() {
         "video",
         file
     );
+
+    let type = "video";
+
+
+    if(
+        document.getElementById("shortsCheckbox").checked
+    ){
+        type = "short";
+    }
+
+
+    formData.append(
+        "content_type",
+        type
+    );
     
     formData.append(
         "title",
@@ -1903,6 +1918,19 @@ function uploadVideo() {
     formData.append(
         "description",
         description
+    );
+
+    // formData.append(
+    //     "is_short",
+    //     isShort ? "true" : "false"
+    // );
+    formData.append(
+        "is_short",
+        "true"
+    );
+    formData.append(
+        "is_short",
+        "false"
     );
     
     if (thumbnailFile) {
@@ -2861,7 +2889,15 @@ function renderStudioVideos(
                         Manage video
                     </button>
 
+                    <button 
+                        class="delete-video-btn"
+                        onclick="deleteVideo(${video.id})">
+                        🗑 Delete
+                    </button>
+
                 </div>
+
+                
 
             `;
 
@@ -5409,5 +5445,77 @@ async function loadCreatorBoost() {
         );
 
     }
+
+}
+
+async function deleteVideo(videoId){
+
+    if(!confirm("Delete this video permanently?")){
+        return;
+    }
+
+
+    const token = localStorage.getItem("creator_token");
+
+    console.log("DELETE TOKEN:", token);
+
+
+    const response = await fetch(
+        `/api/videos/${videoId}`,
+        {
+            method:"DELETE",
+
+            headers:{
+                "Authorization":
+                "Bearer " + token
+            }
+        }
+    );
+
+
+    const data = await response.json();
+
+
+    if(data.success){
+
+        alert(
+            "Video deleted"
+        );
+
+        location.reload();
+
+    }
+    else{
+
+        alert(
+            data.error
+        );
+
+    }
+
+}
+
+const shortsCheckbox = document.getElementById("shortsCheckbox");
+const videoCheckbox = document.getElementById("videoCheckbox");
+
+
+if(shortsCheckbox && videoCheckbox){
+
+    shortsCheckbox.addEventListener("change",()=>{
+
+        if(shortsCheckbox.checked){
+            videoCheckbox.checked = false;
+        }
+
+    });
+
+
+    videoCheckbox.addEventListener("change",()=>{
+
+        if(videoCheckbox.checked){
+            shortsCheckbox.checked = false;
+        }
+
+    });
 
 }
