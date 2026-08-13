@@ -1,4005 +1,5786 @@
-import os
-import time
-import re
-import uuid
-import cv2
-import random
+/* =========================================================
+   CREATOR MOBILE APP
+========================================================= */
 
-from flask import (
-    Flask,
-    request,
-    jsonify,
-    send_from_directory,
-    render_template
-)
+"use strict";
 
-from flask_cors import CORS
 
-from werkzeug.utils import secure_filename
+/* =========================================================
+   CONFIGURATION
+========================================================= */
 
-from config import config
+const API_BASE = "";
 
-from database import (
-    initialize_database,
-    get_connection,
-    database_test
-)
 
-from auth import (
-    hash_password,
-    verify_password,
-    create_token,
-    login_required,
-    get_current_user
-)
+/* =========================================================
+   APPLICATION STATE
+========================================================= */
 
+const state = {
 
-# ============================================================
-# APPLICATION
-# ============================================================
+    token:
+        localStorage.getItem(
+            "creator_token"
+        ) || "",
 
-app = Flask(
-    __name__
-)
-
-CORS(
-    app
-)
-
-app.config[
-    "MAX_CONTENT_LENGTH"
-] = config.MAX_UPLOAD_SIZE
-
-
-# ============================================================
-# CREATE DIRECTORIES
-# ============================================================
-
-os.makedirs(
-    config.UPLOAD_FOLDER,
-    exist_ok=True
-)
-
-
-# ============================================================
-# HELPER FUNCTIONS
-# ============================================================
-
-def now():
-
-    return int(
-        time.time()
-    )
-
-
-def valid_username(username):
-
-    return re.match(
-        r"^[a-zA-Z0-9_]{3,30}$",
-        username
-    )
-
-
-def valid_email(email):
-
-    return re.match(
-        r"^[^@\s]+@[^@\s]+\.[^@\s]+$",
-        email
-    )
-
-
-def allowed_video(filename):
-
-    if "." not in filename:
-
-        return False
-
-    extension = filename.rsplit(
-        ".",
-        1
-    )[1].lower()
-
-    return extension in (
-        config.ALLOWED_VIDEO_EXTENSIONS
-    )
-
-
-# ============================================================
-# AUTO VIDEO THUMBNAIL
-# ============================================================
-
-def create_video_thumbnail(
-    video_path,
-    output_folder
-):
-
-    try:
-
-        capture = cv2.VideoCapture(
-            video_path
-        )
-
-        if not capture.isOpened():
-
-            print(
-                "Could not open video for thumbnail:"
-            )
-
-            return None
-
-
-        frame_count = int(
-            capture.get(
-                cv2.CAP_PROP_FRAME_COUNT
-            )
-        )
-
-        fps = float(
-            capture.get(
-                cv2.CAP_PROP_FPS
-            )
-        )
-
-
-        if frame_count <= 0:
-
-            capture.release()
-
-            return None
-
-
-        # ----------------------------------------------------
-        # Determine duration
-        # ----------------------------------------------------
-
-        duration = (
-            frame_count / fps
-            if fps > 0
-            else 0
-        )
-
-
-        # ----------------------------------------------------
-        # Choose a random point from 15%-85% of video
-        # ----------------------------------------------------
-
-        if duration > 2:
-
-            random_time = random.uniform(
-                duration * 0.15,
-                duration * 0.85
-            )
-
-            capture.set(
-                cv2.CAP_PROP_POS_MSEC,
-                random_time * 1000
-            )
-
-        else:
-
-            random_frame = random.randint(
-                0,
-                max(
-                    0,
-                    frame_count - 1
-                )
-            )
-
-            capture.set(
-                cv2.CAP_PROP_POS_FRAMES,
-                random_frame
-            )
-
-
-        success, frame = capture.read()
-
-
-        # ----------------------------------------------------
-        # Fallback if random frame failed
-        # ----------------------------------------------------
-
-        if not success:
-
-            capture.set(
-                cv2.CAP_PROP_POS_FRAMES,
-                frame_count // 2
-            )
-
-            success, frame = capture.read()
-
-
-        capture.release()
-
-
-        if not success:
-
-            return None
-
-
-        # ----------------------------------------------------
-        # Create filename
-        # ----------------------------------------------------
-
-        thumbnail_filename = (
-            str(uuid.uuid4())
-            + ".jpg"
-        )
-
-        thumbnail_path = os.path.join(
-            output_folder,
-            thumbnail_filename
-        )
-
-
-        # ----------------------------------------------------
-        # Save JPEG
-        # ----------------------------------------------------
-
-        saved = cv2.imwrite(
-            thumbnail_path,
-            frame,
-            [
-                cv2.IMWRITE_JPEG_QUALITY,
-                85
-            ]
-        )
-
-
-        if not saved:
-
-            return None
-
-
-        return thumbnail_filename
-
-
-    except Exception as error:
-
-        print(
-            "Automatic thumbnail error:",
-            error
-        )
-
-        return None
-
-
-def user_to_dict(user):
-
-    if not user:
-
-        return None
-
-    return {
-
-        "id": user["id"],
-
-        "username": user["username"],
-
-        "email": user["email"]
-            if "email" in user.keys()
-            else "",
-
-        "display_name": user["display_name"],
-
-        "bio": user["bio"],
-
-        "avatar": user["avatar"],
-
-        "verified": bool(
-            user["verified"]
+    user:
+        JSON.parse(
+            localStorage.getItem(
+                "creator_user"
+            ) || "null"
         ),
 
-        "created_at": user["created_at"]
+    currentVideo:
+        null,
+
+    currentScreen:
+        "home"
+
+};
+
+
+/* =========================================================
+   DOM HELPERS
+========================================================= */
+
+function $(selector) {
+
+    return document.querySelector(
+        selector
+    );
+
+}
+
+function $all(selector) {
+
+    return document.querySelectorAll(
+        selector
+    );
+
+}
+
+
+/* =========================================================
+   API URL
+========================================================= */
+
+function api(path) {
+
+    return API_BASE + path;
+
+}
+
+
+/* =========================================================
+   API REQUEST
+========================================================= */
+
+async function apiRequest(
+    path,
+    options = {}
+) {
+
+    const headers =
+        options.headers || {};
+
+    if (
+        state.token &&
+        !headers.Authorization
+    ) {
+
+        headers.Authorization =
+            "Bearer " +
+            state.token;
+
+    }
+
+    options.headers = headers;
+
+    const response =
+        await fetch(
+            api(path),
+            options
+        );
+
+    let data = {};
+
+    try {
+
+        data =
+            await response.json();
+
+    } catch (
+        error
+    ) {
+
+        data = {};
+
+    }
+
+    if (
+        response.status === 401
+    ) {
+
+        logoutLocal();
+
+    }
+
+    return {
+        response,
+        data
+    };
+
+}
+
+
+/* =========================================================
+   TOAST
+========================================================= */
+
+let toastTimer = null;
+
+function showToast(
+    message
+) {
+
+    const toast =
+        $("#toast");
+
+    toast.textContent =
+        message;
+
+    toast.classList.add(
+        "show"
+    );
+
+    clearTimeout(
+        toastTimer
+    );
+
+    toastTimer =
+        setTimeout(
+            () => {
+
+                toast.classList.remove(
+                    "show"
+                );
+
+            },
+            2500
+        );
+
+}
+
+
+/* =========================================================
+   SAVE LOGIN
+========================================================= */
+
+function saveLogin(
+    token,
+    user
+) {
+
+    state.token = token;
+
+    state.user = user;
+
+    localStorage.setItem(
+        "creator_token",
+        token
+    );
+
+    localStorage.setItem(
+        "creator_user",
+        JSON.stringify(
+            user
+        )
+    );
+
+}
+
+
+/* =========================================================
+   LOGOUT
+========================================================= */
+
+function logoutLocal() {
+
+    state.token = "";
+
+    state.user = null;
+
+    localStorage.removeItem(
+        "creator_token"
+    );
+
+    localStorage.removeItem(
+        "creator_user"
+    );
+
+    updateProfileUI();
+
+}
+
+
+/* =========================================================
+   SCREEN NAVIGATION
+========================================================= */
+
+function showScreen(
+    name
+) {
+
+    const screens =
+        $all(".screen");
+
+
+    /* -------------------------------------------------------
+       HIDE ALL SCREENS
+    ------------------------------------------------------- */
+
+    screens.forEach(
+        screen => {
+
+            screen.classList.remove(
+                "active"
+            );
+
+        }
+    );
+
+
+    /* -------------------------------------------------------
+       SHOW SELECTED SCREEN
+    ------------------------------------------------------- */
+
+    const target =
+        $(
+            "#" +
+            name +
+            "Screen"
+        );
+
+    if (target) {
+
+        target.classList.add(
+            "active"
+        );
+
     }
 
 
-# ============================================================
-# HOME / MAIN MOBILE APP
-# ============================================================
+    /* -------------------------------------------------------
+       STOP SHORTS WHEN LEAVING
+    ------------------------------------------------------- */
 
-@app.route("/")
-def home():
+    if (
+        state.currentScreen === "shorts" &&
+        name !== "shorts"
+    ) {
 
-    return render_template(
-        "app.html"
-    )
+        if (
+            typeof stopShorts ===
+            "function"
+        ) {
+
+            stopShorts();
+
+        }
+
+    }
 
 
-# ============================================================
-# MOBILE WEB APP
-# ============================================================
+    /* -------------------------------------------------------
+       SAVE CURRENT SCREEN
+    ------------------------------------------------------- */
 
-@app.route("/app")
-def mobile_app():
+    state.currentScreen =
+        name;
 
-    return render_template(
-        "app.html"
-    )
+
+    /* -------------------------------------------------------
+       UPDATE BOTTOM NAVIGATION
+    ------------------------------------------------------- */
+
+    updateNavigation(
+        name
+    );
+
+
+    /* -------------------------------------------------------
+       HOME
+    ------------------------------------------------------- */
+
+    if (
+        name === "home"
+    ) {
+
+        loadForYouFeed();
+
+    }
+
+
+    /* -------------------------------------------------------
+       PROFILE
+    ------------------------------------------------------- */
+
+    if (
+        name === "profile"
+    ) {
+
+        loadProfile();
+
+    }
+
+
+    /* -------------------------------------------------------
+       CREATOR STUDIO
+    ------------------------------------------------------- */
+
+    if (
+        name === "studio"
+    ) {
     
-#=================================================
-# HEALTH
-# ============================================================
+        loadCreatorStudio();
+    
+        loadCreatorBoost();
+    
+    }
 
-@app.route(
-    "/api/health",
-    methods=["GET"]
-)
-def health():
-
-    return jsonify({
-
-        "success": True,
-
-        "message":
-            "Creator Platform API is running",
-
-        "app":
-            config.APP_NAME,
-
-        "version":
-            "1.0.0"
-    })
+    if (
+        name === "notifications"
+    ) {
+    
+        loadNotifications();
+    
+    }
 
 
-# ============================================================
-# DATABASE STATUS
-# ============================================================
+    /* -------------------------------------------------------
+       SHORTS
+    ------------------------------------------------------- */
 
-@app.route(
-    "/api/database",
-    methods=["GET"]
-)
-def database_status():
+    if (
+        name === "shorts"
+    ) {
 
-    tables = database_test()
+        loadShorts();
 
-    return jsonify({
+    }
 
-        "success": True,
+    if (
+        name === "creatorProfile"
+    ) {
+    
+        // Public creator profile is
+        // loaded manually by openCreatorProfile().
+    
+    }
 
-        "tables": tables
-    })
-
-
-# ============================================================
-# REGISTER
-# ============================================================
-
-@app.route(
-    "/api/auth/register",
-    methods=["POST"]
-)
-def register():
-
-    data = request.get_json(
-        silent=True
-    ) or {}
-
-    username = str(
-        data.get("username", "")
-    ).strip()
-
-    email = str(
-        data.get("email", "")
-    ).strip().lower()
-
-    password = str(
-        data.get("password", "")
-    )
-
-    display_name = str(
-        data.get("display_name", "")
-    ).strip()
+}
 
 
-    # ========================================================
-    # VALIDATION
-    # ========================================================
+/* =========================================================
+   NAVIGATION STATE
+========================================================= */
 
-    if not valid_username(username):
+function updateNavigation(
+    current
+) {
 
-        return jsonify({
-            "success": False,
-            "error":
-                "Username must contain 3-30 letters, numbers or _"
-        }), 400
+    const buttons =
+        $all(
+            ".nav-button"
+        );
+
+    buttons.forEach(
+        button => {
+
+            button.classList.remove(
+                "active"
+            );
+
+            if (
+                button.dataset.screen ===
+                current
+            ) {
+
+                button.classList.add(
+                    "active"
+                );
+
+            }
+
+        }
+    );
+
+}
 
 
-    if not valid_email(email):
+/* =========================================================
+   VIDEO FEED
+========================================================= */
 
-        return jsonify({
-            "success": False,
-            "error":
-                "Invalid email"
-        }), 400
+async function loadFeed() {
+
+    const container =
+        $("#videoFeed");
+
+    if (!container) {
+        return;
+    }
+
+    container.innerHTML = `
+        <div class="loading-box">
+            <div class="loading-spinner"></div>
+            <div>Loading videos...</div>
+        </div>
+    `;
+
+    try {
+
+        const {
+            response,
+            data
+        } =
+            await apiRequest(
+                "/api/videos"
+            );
+
+        if (
+            !response.ok
+        ) {
+
+            throw new Error(
+                data.error ||
+                "Could not load videos."
+            );
+
+        }
+
+        renderVideos(
+            container,
+            data.videos || []
+        );
+
+    } catch (
+        error
+    ) {
+
+        container.innerHTML = `
+            <div class="empty-box">
+                <div>
+                    ❌
+                </div>
+
+                <div>
+                    Could not load videos.
+                </div>
+
+                <div>
+                    ${escapeHtml(
+                        error.message
+                    )}
+                </div>
+
+                <button
+                    class="primary-button"
+                    onclick="loadFeed()"
+                >
+                    Retry
+                </button>
+            </div>
+        `;
+
+    }
+
+}
+
+/* =========================================================
+   FOR YOU FEED
+========================================================= */
+
+async function loadForYouFeed() {
+
+    const container =
+        $("#videoFeed");
+
+    if (!container) {
+        return;
+    }
 
 
-    if len(password) < 6:
+    container.innerHTML = `
+        <div class="loading-box">
 
-        return jsonify({
-            "success": False,
-            "error":
-                "Password must contain at least 6 characters"
-        }), 400
+            <div class="loading-spinner"></div>
+
+            <div>
+                Loading For You...
+            </div>
+
+        </div>
+    `;
 
 
-    if not display_name:
+    try {
 
-        display_name = username
+        const {
+            response,
+            data
+        } =
+            await apiRequest(
+                "/api/feed/for-you"
+            );
 
 
-    # ========================================================
-    # DATABASE
-    # ========================================================
+        if (!response.ok) {
 
-    connection = get_connection()
+            throw new Error(
+                data.error ||
+                "Could not load For You."
+            );
 
-    try:
+        }
 
-        existing = connection.execute(
-            """
-            SELECT id
-            FROM users
-            WHERE username = ?
-               OR email = ?
-            """,
-            (
-                username,
-                email
+
+        renderVideos(
+            container,
+            data.videos || []
+        );
+
+
+    } catch (
+        error
+    ) {
+
+        container.innerHTML = `
+            <div class="empty-box">
+
+                <div>
+                    ❌
+                </div>
+
+                <div>
+                    Could not load For You.
+                </div>
+
+                <div>
+                    ${escapeHtml(
+                        error.message
+                    )}
+                </div>
+
+                <button
+                    class="primary-button"
+                    onclick="loadForYouFeed()"
+                >
+                    Retry
+                </button>
+
+            </div>
+        `;
+
+    }
+
+}
+
+
+/* =========================================================
+   RENDER VIDEOS
+========================================================= */
+
+function renderVideos(
+    container,
+    videos
+) {
+
+    container.innerHTML = "";
+
+    if (
+        !videos.length
+    ) {
+
+        container.innerHTML = `
+            <div class="empty-box">
+                <div style="font-size:35px">
+                    🎬
+                </div>
+
+                <div>
+                    No videos yet.
+                </div>
+
+                <div>
+                    Be the first creator!
+                </div>
+
+                <button
+                    class="primary-button"
+                    onclick="showScreen('create')"
+                >
+                    Upload a video
+                </button>
+            </div>
+        `;
+
+        return;
+
+    }
+
+    videos.forEach(
+        video => {
+
+            container.appendChild(
+                createVideoCard(
+                    video
+                )
+            );
+
+        }
+    );
+
+}
+
+
+/* =========================================================
+   VIDEO CARD
+========================================================= */
+
+function createVideoCard(
+    video
+) {
+
+    const card =
+        document.createElement(
+            "article"
+        );
+
+    card.className =
+        "video-card";
+
+    const creator =
+        video.creator || {};
+
+    const videoUrl =
+        video.video_url
+            ? api(
+                video.video_url
             )
-        ).fetchone()
+            : "";
 
-
-        if existing:
-
-            return jsonify({
-                "success": False,
-                "error":
-                    "Username or email already exists"
-            }), 409
-
-
-        # ====================================================
-        # CREATE USER
-        # ====================================================
-
-        password_hash = hash_password(
-            password
-        )
-
-
-        cursor = connection.execute(
-            """
-            INSERT INTO users
-            (
-                username,
-                email,
-                password_hash,
-                display_name,
-                bio,
-                avatar,
-                verified,
-                created_at
-            )
-
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                username,
-                email,
-                password_hash,
-                display_name,
-                "",
-                "",
-                0,
-                now()
-            )
-        )
-
-
-        connection.commit()
-
-
-        user_id = cursor.lastrowid
-
-
-        # ====================================================
-        # GET CREATED USER
-        # ====================================================
-
-        user = connection.execute(
-            """
-            SELECT *
-            FROM users
-            WHERE id = ?
-            """,
-            (
-                user_id,
-            )
-        ).fetchone()
-
-
-        if not user:
-
-            connection.rollback()
-
-            return jsonify({
-                "success": False,
-                "error":
-                    "Could not create account"
-            }), 500
-
-
-        token = create_token(
-            user_id
-        )
-
-
-        return jsonify({
-
-            "success": True,
-
-            "message":
-                "Account created successfully",
-
-            "token":
-                token,
-
-            "user":
-                user_to_dict(user)
-
-        }), 201
-
-
-    except Exception as error:
-
-        connection.rollback()
-
-        print(
-            "REGISTER ERROR:",
-            repr(error)
-        )
-
-        return jsonify({
-
-            "success": False,
-
-            "error":
-                "Could not create account",
-
-            "details":
-                str(error)
-
-        }), 500
-
-
-    finally:
-
-        connection.close()
-
-
-# ============================================================
-# LOGIN
-# ============================================================
-
-@app.route(
-    "/api/auth/login",
-    methods=["POST"]
-)
-def login():
-
-    data = request.get_json(
-        silent=True
-    ) or {}
-
-    login_value = str(
-        data.get(
-            "login",
+    const thumbnail =
+        video.source === "youtube"
+        ?
+        `https://img.youtube.com/vi/${video.youtube_id}/hqdefault.jpg`
+        :
+        (
+            video.thumbnail
+            ?
+            api(video.thumbnail)
+            :
             ""
-        )
-    ).strip().lower()
-
-    password = str(
-        data.get(
-            "password",
-            ""
-        )
-    )
-
-    if not login_value or not password:
-
-        return jsonify({
-
-            "success": False,
-
-            "error":
-                "Login and password are required"
-
-        }), 400
-
-    connection = get_connection()
-
-    user = connection.execute(
-        """
-        SELECT *
-        FROM users
-
-        WHERE
-            LOWER(username) = ?
-            OR
-            LOWER(email) = ?
-        """,
-        (
-            login_value,
-            login_value
-        )
-    ).fetchone()
-
-    connection.close()
-
-    if not user:
-
-        return jsonify({
-
-            "success": False,
-
-            "error":
-                "Invalid username/email or password"
-
-        }), 401
-
-    if not verify_password(
-        password,
-        user["password_hash"]
-    ):
-
-        return jsonify({
-
-            "success": False,
-
-            "error":
-                "Invalid username/email or password"
-
-        }), 401
-
-    token = create_token(
-        user["id"]
-    )
-
-    return jsonify({
-
-        "success": True,
-
-        "message":
-            "Login successful",
-
-        "token":
-            token,
-
-        "user":
-            user_to_dict(user)
-
-    })
-
-
-# ============================================================
-# CURRENT USER
-# ============================================================
-
-@app.route(
-    "/api/auth/me",
-    methods=["GET"]
-)
-@login_required
-def me(user):
-
-    return jsonify({
-
-        "success": True,
-
-        "user":
-            user_to_dict(user)
-
-    })
-
-
-# ============================================================
-# LOGOUT
-# ============================================================
-
-@app.route(
-    "/api/auth/logout",
-    methods=["POST"]
-)
-@login_required
-def logout(user):
-
-    # JWT is stateless.
-    # The mobile app simply deletes its token.
-
-    return jsonify({
-
-        "success": True,
-
-        "message":
-            "Logged out successfully"
-
-    })
-
-
-# ============================================================
-# UPDATE PROFILE
-# ============================================================
-
-@app.route(
-    "/api/users/me",
-    methods=["PUT"]
-)
-@login_required
-def update_profile(user):
-
-    data = request.get_json(
-        silent=True
-    ) or {}
-
-    display_name = str(
-        data.get(
-            "display_name",
-            user["display_name"]
-        )
-    ).strip()
-
-    bio = str(
-        data.get(
-            "bio",
-            user["bio"]
-        )
-    ).strip()
-
-    if len(display_name) > 100:
-
-        return jsonify({
-
-            "success": False,
-
-            "error":
-                "Display name is too long"
-
-        }), 400
-
-    if len(bio) > 500:
-
-        return jsonify({
-
-            "success": False,
-
-            "error":
-                "Bio is too long"
-
-        }), 400
-
-    connection = get_connection()
-
-    connection.execute(
-        """
-        UPDATE users
-
-        SET
-            display_name = ?,
-            bio = ?
-
-        WHERE id = ?
-        """,
-        (
-            display_name,
-            bio,
-            user["id"]
-        )
-    )
-
-    connection.commit()
-
-    updated = connection.execute(
-        """
-        SELECT *
-        FROM users
-        WHERE id = ?
-        """,
-        (user["id"],)
-    ).fetchone()
-
-    connection.close()
-
-    return jsonify({
-
-        "success": True,
-
-        "user":
-            user_to_dict(updated)
-
-    })
-
-
-# ============================================================
-# PUBLIC PROFILE
-# ============================================================
-
-@app.route(
-    "/api/users/<username>",
-    methods=["GET"]
-)
-def public_profile(username):
-
-    connection = get_connection()
-
-    user = connection.execute(
-        """
-        SELECT
-            id,
-            username,
-            display_name,
-            bio,
-            avatar,
-            verified,
-            created_at
-
-        FROM users
-
-        WHERE LOWER(username) = ?
-        """,
-        (
-            username.lower(),
-        )
-    ).fetchone()
-
-    if not user:
-
-        connection.close()
-
-        return jsonify({
-
-            "success": False,
-
-            "error":
-                "User not found"
-
-        }), 404
-
-    followers = connection.execute(
-        """
-        SELECT COUNT(*) AS count
-        FROM followers
-        WHERE following_id = ?
-        """,
-        (user["id"],)
-    ).fetchone()["count"]
-
-    following = connection.execute(
-        """
-        SELECT COUNT(*) AS count
-        FROM followers
-        WHERE follower_id = ?
-        """,
-        (user["id"],)
-    ).fetchone()["count"]
-
-    videos = connection.execute(
-        """
-        SELECT
-            id,
-            title,
-            description,
-            filename,
-            thumbnail,
-            views,
-            likes,
-            comments_count,
-            created_at
-
-        FROM videos
-
-        WHERE user_id = ?
-
-        ORDER BY created_at DESC
-        """,
-        (user["id"],)
-    ).fetchall()
-
-    connection.close()
-
-    return jsonify({
-
-        "success": True,
-
-        "user": {
-
-            "id":
-                user["id"],
-
-            "username":
-                user["username"],
-
-            "display_name":
-                user["display_name"],
-
-            "bio":
-                user["bio"],
-
-            "avatar":
-                user["avatar"],
-
-            "verified":
-                bool(user["verified"]),
-
-            "followers":
-                followers,
-
-            "following":
-                following,
-
-            "created_at":
-                user["created_at"]
-        },
-
-        "videos": [
-
-            {
-
-                "id":
-                    video["id"],
-
-                "title":
-                    video["title"],
-
-                "description":
-                    video["description"],
-
-                "video_url":
-                    "/media/" +
-                    video["filename"],
-
-                "thumbnail":
-                    video["thumbnail"],
-
-                "views":
-                    video["views"],
-
-                "likes":
-                    video["likes"],
-
-                "comments":
-                    video["comments_count"],
-
-                "created_at":
-                    video["created_at"]
-            }
-
-            for video in videos
-        ]
-
-    })
-
-
-# ============================================================
-# FOLLOW / UNFOLLOW USER
-# ============================================================
-
-@app.route(
-    "/api/users/<username>/follow",
-    methods=["POST"]
-)
-@login_required
-def follow_user(
-    user,
-    username
-):
-
-    connection = get_connection()
-
-    # --------------------------------------------------------
-    # FIND TARGET USER
-    # --------------------------------------------------------
-
-    target = connection.execute(
-        """
-        SELECT
-            id,
-            username,
-            display_name
-        FROM users
-        WHERE LOWER(username) = ?
-        """,
-        (
-            username.lower(),
-        )
-    ).fetchone()
-
-    if not target:
-
-        connection.close()
-
-        return jsonify({
-
-            "success": False,
-
-            "error":
-                "User not found"
-
-        }), 404
-
-
-    # --------------------------------------------------------
-    # PREVENT SELF-FOLLOW
-    # --------------------------------------------------------
-
-    if target["id"] == user["id"]:
-
-        connection.close()
-
-        return jsonify({
-
-            "success": False,
-
-            "error":
-                "You cannot follow yourself"
-
-        }), 400
-
-
-    # --------------------------------------------------------
-    # CHECK CURRENT FOLLOW STATE
-    # --------------------------------------------------------
-
-    existing = connection.execute(
-        """
-        SELECT id
-        FROM followers
-        WHERE follower_id = ?
-          AND following_id = ?
-        """,
-        (
-            user["id"],
-            target["id"]
-        )
-    ).fetchone()
-
-
-    # --------------------------------------------------------
-    # UNFOLLOW
-    # --------------------------------------------------------
-
-    if existing:
-
-        connection.execute(
-            """
-            DELETE FROM followers
-            WHERE follower_id = ?
-              AND following_id = ?
-            """,
-            (
-                user["id"],
-                target["id"]
-            )
-        )
-
-        following = False
-
-
-    # --------------------------------------------------------
-    # FOLLOW
-    # --------------------------------------------------------
-
-    else:
-
-        connection.execute(
-            """
-            INSERT INTO followers
-            (
-                follower_id,
-                following_id,
-                created_at
-            )
-            VALUES (?, ?, ?)
-            """,
-            (
-                user["id"],
-                target["id"],
-                now()
-            )
-        )
-
-        following = True
-
-
-        # ----------------------------------------------------
-        # CREATE NOTIFICATION
-        # ----------------------------------------------------
-
-        connection.execute(
-            """
-            INSERT INTO notifications
-            (
-                user_id,
-                sender_id,
-                notification_type,
-                message,
-                created_at
-            )
-            VALUES (?, ?, ?, ?, ?)
-            """,
-            (
-                target["id"],
-                user["id"],
-                "follow",
-                "started following you",
-                now()
-            )
-        )
-
-
-    connection.commit()
-
-
-    # --------------------------------------------------------
-    # FOLLOWER COUNT
-    # --------------------------------------------------------
-
-    follower_count = connection.execute(
-        """
-        SELECT COUNT(*) AS count
-        FROM followers
-        WHERE following_id = ?
-        """,
-        (
-            target["id"],
-        )
-    ).fetchone()["count"]
-
-
-    connection.close()
-
-
-    return jsonify({
-
-        "success": True,
-
-        "following":
-            following,
-
-        "followers":
-            follower_count
-
-    })
-
-
-# ============================================================
-# FOLLOW STATUS
-# ============================================================
-
-@app.route(
-    "/api/users/<username>/follow/status",
-    methods=["GET"]
-)
-@login_required
-def follow_status(
-    user,
-    username
-):
-
-    connection = get_connection()
-
-    target = connection.execute(
-        """
-        SELECT id
-        FROM users
-        WHERE LOWER(username) = ?
-        """,
-        (
-            username.lower(),
-        )
-    ).fetchone()
-
-    if not target:
-
-        connection.close()
-
-        return jsonify({
-
-            "success": False,
-
-            "error":
-                "User not found"
-
-        }), 404
-
-
-    following = connection.execute(
-        """
-        SELECT id
-        FROM followers
-
-        WHERE follower_id = ?
-          AND following_id = ?
-        """,
-        (
-            user["id"],
-            target["id"]
-        )
-    ).fetchone() is not None
-
-
-    connection.close()
-
-
-    return jsonify({
-
-        "success": True,
-
-        "following":
-            following
-
-    })
-
-
-
-# ============================================================
-# FOLLOWING FEED
-# ============================================================
-
-@app.route(
-    "/api/feed/following",
-    methods=["GET"]
-)
-@login_required
-def following_feed(user):
-
-    connection = get_connection()
-
-    videos = connection.execute(
-        """
-        SELECT
-
-            videos.id,
-
-            videos.title,
-
-            videos.description,
-
-            videos.filename,
-
-            videos.thumbnail,
-
-            videos.views,
-
-            videos.likes,
-
-            videos.comments_count,
-
-            videos.created_at,
-
-            users.id AS user_id,
-
-            users.username,
-
-            users.display_name,
-
-            users.avatar,
-
-            users.verified
-
-        FROM videos
-
-        JOIN users
-            ON users.id = videos.user_id
-
-        JOIN followers
-            ON followers.following_id = videos.user_id
-
-        WHERE
-            followers.follower_id = ?
-
-            AND
-
-            videos.visibility = 'public'
-            AND
-
-            videos.is_short = 0
-
-            
-
-        ORDER BY
-            videos.created_at DESC
-
-        LIMIT 100
-        """,
-        (
-            user["id"],
-        )
-    ).fetchall()
-
-    connection.close()
-
-
-    result = []
-
-    for video in videos:
-
-        result.append({
-
-            "id":
-                video["id"],
-
-            "title":
-                video["title"],
-
-            "description":
-                video["description"],
-
-            "video_url":
-                "/media/"
-                + video["filename"],
-
-            "thumbnail":
-                video["thumbnail"],
-
-            "views":
-                video["views"],
-
-            "likes":
-                video["likes"],
-
-            "comments":
-                video["comments_count"],
-
-            "created_at":
-                video["created_at"],
-
-            "creator": {
-
-                "id":
-                    video["user_id"],
-
-                "username":
-                    video["username"],
-
-                "display_name":
-                    video["display_name"],
-
-                "avatar":
-                    video["avatar"],
-
-                "verified":
-                    bool(
-                        video["verified"]
-                    )
-            }
-
-        })
-
-
-    return jsonify({
-
-        "success": True,
-
-        "count":
-            len(result),
-
-        "videos":
-            result
-
-    })
-# ============================================================
-# NOTIFICATIONS
-# ============================================================
-
-@app.route(
-    "/api/notifications",
-    methods=["GET"]
-)
-@login_required
-def notifications(user):
-
-    connection = get_connection()
-
-    rows = connection.execute(
-        """
-        SELECT
-
-            notifications.id,
-
-            notifications.notification_type,
-
-            notifications.message,
-
-            notifications.video_id,
-
-            notifications.is_read,
-
-            notifications.created_at,
-
-            users.username,
-
-            users.display_name,
-
-            users.avatar
-
-        FROM notifications
-
-        LEFT JOIN users
-            ON users.id = notifications.sender_id
-
-        WHERE
-            notifications.user_id = ?
-
-        ORDER BY
-            notifications.created_at DESC
-
-        LIMIT 100
-        """,
-        (
-            user["id"],
-        )
-    ).fetchall()
-
-    connection.close()
-
-
-    return jsonify({
-
-        "success": True,
-
-        "notifications": [
-
-            {
-
-                "id":
-                    row["id"],
-
-                "type":
-                    row["notification_type"],
-
-                "message":
-                    row["message"],
-
-                "video_id":
-                    row["video_id"],
-
-                "is_read":
-                    bool(
-                        row["is_read"]
-                    ),
-
-                "created_at":
-                    row["created_at"],
-
-                "sender": {
-
-                    "username":
-                        row["username"],
-
-                    "display_name":
-                        row["display_name"],
-
-                    "avatar":
-                        row["avatar"]
-                }
-
-            }
-
-            for row in rows
-        ]
-
-    })
-
-# ============================================================
-# MARK NOTIFICATIONS AS READ
-# ============================================================
-
-@app.route(
-    "/api/notifications/read",
-    methods=["POST"]
-)
-@login_required
-def mark_notifications_read(user):
-
-    connection = get_connection()
-
-    connection.execute(
-        """
-        UPDATE notifications
-
-        SET is_read = 1
-
-        WHERE user_id = ?
-        """,
-        (
-            user["id"],
-        )
-    )
-
-    connection.commit()
-
-    connection.close()
-
-    return jsonify({
-
-        "success": True
-
-    })
-
-# ============================================================
-# DELETE OWN VIDEO
-# ============================================================
-
-@app.route(
-    "/api/videos/<int:video_id>",
-    methods=["DELETE"]
-)
-@login_required
-def delete_video(
-    user,
-    video_id
-):
-
-    connection = get_connection()
-
-    # ========================================================
-    # FIND VIDEO
-    # ========================================================
-
-    video = connection.execute(
-        """
-        SELECT
-            id,
-            user_id,
-            filename,
+        );
+
+    const isYouTube =
+        video.source === "youtube";
+
+    card.innerHTML = `
+        
+
+        ${
+            video.boosted
+            ? `
+                <div class="boosted-label">
+                    🚀 Creator Boost
+                </div>
+            `
+            : ""
+        }
+
+        <div
+            class="video-preview"
+            data-video-id="${video.id}"
+            data-source="${video.source || 'creator'}"
+            data-youtube-id="${video.youtube_id || ''}"
+        >
+
+        ${
             thumbnail
-        FROM videos
-        WHERE id = ?
-        """,
-        (
-            video_id,
-        )
-    ).fetchone()
-
-    if not video:
-
-        connection.close()
-
-        return jsonify({
-
-            "success": False,
-
-            "error":
-                "Video not found"
-
-        }), 404
-
-    # ========================================================
-    # SECURITY
-    # ========================================================
-    # User can delete ONLY their own video.
-
-    if video["user_id"] != user["id"]:
-
-        connection.close()
-
-        return jsonify({
-
-            "success": False,
-
-            "error":
-                "You can only delete your own videos"
-
-        }), 403
-
-    # ========================================================
-    # FILE PATH
-    # ========================================================
-
-    video_path = os.path.join(
-        config.UPLOAD_FOLDER,
-        video["filename"]
-    )
-
-    thumbnail_filename = video["thumbnail"]
-
-    thumbnail_path = None
-
-    if thumbnail_filename:
-
-        # Database stores something like:
-        # /media/abc.jpg
-
-        thumbnail_name = (
-            thumbnail_filename
-            .replace("/media/", "")
-            .replace("\\media\\", "")
-        )
-
-        thumbnail_path = os.path.join(
-            config.UPLOAD_FOLDER,
-            thumbnail_name
-        )
-
-    # ========================================================
-    # DELETE DATABASE RECORD
-    # ========================================================
-
-    try:
-
-        connection.execute(
-            """
-            DELETE FROM videos
-            WHERE id = ?
-            """,
-            (
-                video_id,
-            )
-        )
-
-        connection.commit()
-
-    except Exception as error:
-
-        connection.rollback()
-        connection.close()
-
-        return jsonify({
-
-            "success": False,
-
-            "error":
-                "Could not delete video",
-
-            "details":
-                str(error)
-
-        }), 500
-
-    connection.close()
-
-    # ========================================================
-    # DELETE VIDEO FILE
-    # ========================================================
-
-    try:
-
-        if os.path.exists(video_path):
-
-            os.remove(
-                video_path
-            )
-
-    except Exception as error:
-
-        print(
-            "Could not delete video file:",
-            error
-        )
-
-    # ========================================================
-    # DELETE THUMBNAIL
-    # ========================================================
-
-    try:
-
-        if thumbnail_path:
-
-            if os.path.exists(
-                thumbnail_path
-            ):
-
-                os.remove(
-                    thumbnail_path
-                )
-
-    except Exception as error:
-
-        print(
-            "Could not delete thumbnail:",
-            error
-        )
-
-    # ========================================================
-    # RESPONSE
-    # ========================================================
-
-    return jsonify({
-
-        "success": True,
-
-        "message":
-            "Video deleted successfully",
-
-        "video_id":
-            video_id
-
-    })
-
-# ============================================================
-# UPLOAD VIDEO
-# ============================================================
-
-@app.route(
-    "/api/videos",
-    methods=["POST"]
-)
-@login_required
-def upload_video(user):
-
-    content_type = str(
-        request.form.get(
-            "content_type",
-            "video"
-        )
-    ).lower().strip()
-
-    is_short_value = str(
-        request.form.get(
-            "is_short",
-            ""
-        )
-    ).lower().strip()
-
-
-    if is_short_value in (
-        "true",
-        "1",
-        "yes",
-        "on"
-    ):
-        is_short = 1
-
-    elif content_type in (
-        "short",
-        "shorts"
-    ):
-        is_short = 1
-
-    else:
-        is_short = 0
-
-    content_type = request.form.get(
-        "content_type",
-        "video"
-    ).lower().strip()
-
-
-    if content_type == "short":
-        is_short = 1
-    else:
-        is_short = 0
-
-    video_file = request.files.get(
-        "video"
-    )
-
-    thumbnail_file = request.files.get(
-        "thumbnail"
-    )
-
-    title = str(
-        request.form.get(
-            "title",
-            ""
-        )
-    ).strip()
-
-    description = str(
-        request.form.get(
-            "description",
-            ""
-        )
-    ).strip()
-
-    # is_short = int(
-    #     request.form.get(
-    #         "is_short",
-    #         0
-    #     )
-    # )
-
-    # is_short = request.form.get(
-    #     "is_short",
-    #     "0"
-    # ).lower() in (
-    #     "1",
-    #     "true",
-    #     "yes",
-    #     "on"
-    # )
-
-    # ========================================================
-    # SHORT STATUS
-    # ========================================================
-
-    # Frontend can send:
-    # is_short = "true"
-    # is_short = "1"
-    # is_short = "on"
-    #
-    # Anything else means normal video.
-
-    # ========================================================
-    # SHORT STATUS
-    # ========================================================
-
-    content_type = str(
-        request.form.get(
-            "content_type",
-            "video"
-        )
-    ).lower().strip()
-
-
-    if content_type in ("short", "shorts"):
-        is_short = 1
-    else:
-        is_short = 0
-
-    # ========================================================
-    # VALIDATION
-    # ========================================================
-
-    if not video_file:
-
-        return jsonify({
-
-            "success": False,
-
-            "error":
-                "Video file is required"
-
-        }), 400
-
-    if not title:
-
-        return jsonify({
-
-            "success": False,
-
-            "error":
-                "Video title is required"
-
-        }), 400
-
-    if not allowed_video(
-        video_file.filename
-    ):
-
-        return jsonify({
-
-            "success": False,
-
-            "error":
-                "Unsupported video format"
-
-        }), 400
-
-    # ========================================================
-    # SAVE VIDEO
-    # ========================================================
-
-    original_name = secure_filename(
-        video_file.filename
-    )
-
-    extension = original_name.rsplit(
-        ".",
-        1
-    )[1].lower()
-
-    filename = (
-        str(uuid.uuid4())
-        + "."
-        + extension
-    )
-
-    destination = os.path.join(
-        config.UPLOAD_FOLDER,
-        filename
-    )
-
-    thumbnail_filename = None
-
-    try:
-
-        video_file.save(
-            destination
-        )
-
-        # ====================================================
-        # CUSTOM THUMBNAIL
-        # ====================================================
-
-        if thumbnail_file:
-
-            thumbnail_original = secure_filename(
-                thumbnail_file.filename
-            )
-
-            if "." in thumbnail_original:
-
-                thumbnail_extension = (
-                    thumbnail_original
-                    .rsplit(".", 1)[1]
-                    .lower()
-                )
-
-                if thumbnail_extension in (
-                    "jpg",
-                    "jpeg",
-                    "png",
-                    "webp"
-                ):
-
-                    thumbnail_filename = (
-                        str(uuid.uuid4())
-                        + "."
-                        + thumbnail_extension
-                    )
-
-                    thumbnail_destination = os.path.join(
-                        config.UPLOAD_FOLDER,
-                        thumbnail_filename
-                    )
-
-                    thumbnail_file.save(
-                        thumbnail_destination
-                    )
-
-        # ====================================================
-        # AUTOMATIC THUMBNAIL
-        # ====================================================
-
-        if not thumbnail_filename:
-
-            thumbnail_filename = create_video_thumbnail(
-                destination,
-                config.UPLOAD_FOLDER
-            )
-
-    except Exception as error:
-
-        # Remove video if database/save process fails
-        try:
-            if os.path.exists(destination):
-                os.remove(destination)
-        except Exception:
-            pass
-
-        return jsonify({
-
-            "success": False,
-
-            "error":
-                "Could not save video",
-
-            "details":
-                str(error)
-
-        }), 500
-
-    # ========================================================
-    # DATABASE
-    # ========================================================
-
-    connection = get_connection()
-
-    try:
-
-        print("USER ID:", user["id"])
-
-        print("VIDEO DATA:")
-        print(title)
-        print(description)
-        print(filename)
-        print(thumbnail_filename)
-        print(is_short)
-
-
-        cursor = connection.execute(
-            """
-            INSERT INTO videos
-            (
-                user_id,
-                title,
-                description,
-                filename,
-                thumbnail,
-                is_short,
-                created_at
-            )
-
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                user["id"],
-                title,
-                description,
-                filename,
-                (
-                    "/media/" + thumbnail_filename
-                    if thumbnail_filename
-                    else ""
-                ),
-                is_short,
-                now()
-            )
-        )
-
-
-        connection.commit()
-
-        video_id = cursor.lastrowid
-
-
-    except Exception as error:
-
-        print(
-            "DATABASE INSERT ERROR:",
-            error
-        )
-
-        connection.rollback()
-        connection.close()
-
-        return jsonify({
-
-            "success": False,
-
-            "error": str(error)
-
-        }), 500
-
-
-        connection.close()
-
-        return jsonify({
-
-            "success": False,
-            "error": str(error)
-
-        }), 500
-
-    connection.close()
-
-    # ========================================================
-    # RESPONSE
-    # ========================================================
-
-    return jsonify({
-
-        "success": True,
-
-        "message":
-            "Short uploaded successfully"
-            if is_short
-            else
-            "Video uploaded successfully",
-
-        "video_id":
-            video_id,
-
-        "is_short":
-            bool(is_short),
-
-        "video_url":
-            "/media/" + filename,
-
-        "thumbnail":
-            (
-                "/media/" + thumbnail_filename
-                if thumbnail_filename
-                else None
-            )
-
-    }), 201
-
-# ============================================================
-# VIDEO FEED
-# ============================================================
-
-@app.route(
-    "/api/videos",
-    methods=["GET"]
-)
-def videos():
-
-    search = request.args.get(
-        "q",
-        ""
-    ).strip()
-
-    connection = get_connection()
-
-    if search:
-
-        rows = connection.execute(
-            """
-            SELECT
-
-                videos.id,
-
-                videos.title,
-
-                videos.description,
-
-                videos.filename,
-
-                videos.thumbnail,
-
-                videos.views,
-
-                videos.likes,
-
-                videos.comments_count,
-
-                videos.created_at,
-
-                users.id AS user_id,
-
-                users.username,
-
-                users.display_name,
-
-                users.avatar,
-
-                users.verified
-
-            FROM videos
-
-            JOIN users
-                ON users.id = videos.user_id
-
-            WHERE
-
-                videos.visibility = 'public'
-
-                AND
-
-                videos.is_short = 0
-
-                AND
-
-                (
-                    videos.title LIKE ?
-                    OR
-                    videos.description LIKE ?
-                    OR
-                    users.username LIKE ?
-                )
-
-            ORDER BY
-                videos.created_at DESC
-
-            LIMIT 100
-            """,
-            (
-                "%" + search + "%",
-                "%" + search + "%",
-                "%" + search + "%"
-            )
-        ).fetchall()
-
-    else:
-
-        rows = connection.execute(
-            """
-            SELECT
-
-                videos.id,
-
-                videos.title,
-
-                videos.description,
-
-                videos.filename,
-
-                videos.thumbnail,
-
-                videos.views,
-
-                videos.likes,
-
-                videos.comments_count,
-
-                videos.created_at,
-
-                users.id AS user_id,
-
-                users.username,
-
-                users.display_name,
-
-                users.avatar,
-
-                users.verified
-
-            FROM videos
-
-            JOIN users
-                ON users.id = videos.user_id
-
-            WHERE
-                videos.visibility = 'public'
-
-            ORDER BY
-                videos.created_at DESC
-
-            LIMIT 100
-            """
-        ).fetchall()
-
-    connection.close()
-
-    result = []
-
-    for video in rows:
-
-        result.append({
-
-            "id":
-                video["id"],
-
-            "title":
-                video["title"],
-
-            "description":
-                video["description"],
-
-            "video_url":
-                "/media/"
-                + video["filename"],
-
-            "thumbnail":
-                video["thumbnail"],
-
-            "views":
-                video["views"],
-
-            "likes":
-                video["likes"],
-
-            "comments":
-                video["comments_count"],
-
-            "created_at":
-                video["created_at"],
-
-            "creator": {
-
-                "id":
-                    video["user_id"],
-
-                "username":
-                    video["username"],
-
-                "display_name":
-                    video["display_name"],
-
-                "avatar":
-                    video["avatar"],
-
-                "verified":
-                    bool(video["verified"])
+            ? `
+                <img
+                    src="${escapeAttribute(
+                        thumbnail
+                    )}"
+                    alt=""
+                    class="video-thumbnail-image"
+                >
+            `
+            : `
+                <div
+                    class="random-thumbnail"
+                    data-video-id="${video.id}"
+                >
+        
+                    <div class="random-thumbnail-icon">
+                        ${getRandomThumbnailIcon(
+                            video.id
+                        )}
+                    </div>
+        
+                    <div class="random-thumbnail-title">
+                        ${escapeHtml(
+                            video.title ||
+                            "Creator Video"
+                        )}
+                    </div>
+        
+                </div>
+            `
+        }
+
+            <div class="video-play">
+                ▶
+            </div>
+
+        </div>
+
+        <div class="video-info">
+
+            <h2 class="video-title">
+                ${escapeHtml(
+                    video.title ||
+                    "Untitled"
+                )}
+            </h2>
+
+            <div
+                class="video-creator creator-clickable"
+                data-creator="${escapeAttribute(
+                    creator.username ||
+                    "creator"
+                )}"
+            >
+            
+                @${escapeHtml(
+                    creator.username ||
+                    "creator"
+                )}
+        
+            </div>
+
+            <div class="video-stats">
+
+                👁 ${Number(
+                    video.views || 0
+                )}
+
+                &nbsp;&nbsp;
+
+                ❤️ ${Number(
+                    video.likes || 0
+                )}
+
+                &nbsp;&nbsp;
+
+                💬 ${Number(
+                    video.comments || 0
+                )}
+
+            </div>
+
+            ${
+                video.description
+                ? `
+                    <div class="video-description">
+
+                        ${escapeHtml(
+                            video.description
+                        )}
+
+                    </div>
+                `
+                : ""
             }
 
-        })
+        </div>
 
-    return jsonify({
+    `;
 
-        "success": True,
+    const preview =
+        card.querySelector(
+            ".video-preview"
+        );
 
-        "count":
-            len(result),
+    if(
+        isYouTube &&
+        video.youtube_id
+    ){
+    
+        preview.dataset.youtube =
+            video.youtube_id;
+    
+    }
 
-        "videos":
-            result
+    preview.addEventListener(
+        "click",
+        () => {
 
-    })
+            console.log("CLICK DATA FULL", JSON.stringify(video, null, 2));
 
+            openVideo(
+                video
+            );
 
-# ============================================================
-# GET SINGLE VIDEO
-# ============================================================
+        }
+    );
 
-@app.route(
-    "/api/videos/<int:video_id>",
-    methods=["GET"]
-)
-def get_video(video_id):
+    
 
-    connection = get_connection()
+    const creatorElement =
+    card.querySelector(
+        ".creator-clickable"
+    );
 
-    video = connection.execute(
-        """
-        SELECT
+    if (creatorElement) {
 
-            videos.id,
-            videos.title,
-            videos.description,
-            videos.filename,
-            videos.thumbnail,
-            videos.views,
-            videos.likes,
-            videos.comments_count,
-            videos.created_at,
+        creatorElement.addEventListener(
+            "click",
+            event => {
 
-            users.id AS user_id,
-            users.username,
-            users.display_name,
-            users.avatar,
-            users.verified
+                event.stopPropagation();
 
-        FROM videos
+                openCreatorProfile(
+                    creatorElement.dataset.creator
+                );
 
-        JOIN users
-            ON users.id = videos.user_id
+            }
+        );
 
-        WHERE videos.id = ?
+    }
 
-          AND videos.visibility = 'public'
+    return card;
 
-          AND videos.is_short = 0
-
-        """,
-        (
-            video_id,
-        )
-    ).fetchone()
-
-    if not video:
-
-        connection.close()
-
-        return jsonify({
-
-            "success": False,
-
-            "error":
-                "Video not found"
-
-        }), 404
+}
 
 
-    # --------------------------------------------------------
-    # INCREMENT VIEW COUNT
-    # --------------------------------------------------------
+async function enterVideoFullscreen(element) {
 
-    connection.execute(
-        """
-        UPDATE videos
+    if (!element) {
+        return;
+    }
 
-        SET views = views + 1
+    try {
 
-        WHERE id = ?
-        """,
-        (
-            video_id,
-        )
-    )
+        if (element.requestFullscreen) {
 
-    connection.commit()
+            await element.requestFullscreen();
 
+        } 
+        else if (element.webkitRequestFullscreen) {
 
-    # --------------------------------------------------------
-    # READ UPDATED VIEW COUNT
-    # --------------------------------------------------------
-
-    updated_views = connection.execute(
-        """
-        SELECT views
-        FROM videos
-        WHERE id = ?
-        """,
-        (
-            video_id,
-        )
-    ).fetchone()["views"]
-
-
-    connection.close()
-
-
-    return jsonify({
-
-        "success": True,
-
-        "id":
-            video["id"],
-
-        "title":
-            video["title"],
-
-        "description":
-            video["description"],
-
-        "video_url":
-            "/media/" +
-            video["filename"],
-
-        "thumbnail":
-            video["thumbnail"],
-
-        "views":
-            updated_views,
-
-        "likes":
-            video["likes"],
-
-        "comments":
-            video["comments_count"],
-
-        "created_at":
-            video["created_at"],
-
-        "creator": {
-
-            "id":
-                video["user_id"],
-
-            "username":
-                video["username"],
-
-            "display_name":
-                video["display_name"],
-
-            "avatar":
-                video["avatar"],
-
-            "verified":
-                bool(
-                    video["verified"]
-                )
+            await element.webkitRequestFullscreen();
 
         }
 
-    })
 
+        if (screen.orientation) {
 
-# ============================================================
-# GET VIDEO COMMENTS
-# ============================================================
+            try {
 
-@app.route(
-    "/api/videos/<int:video_id>/comments",
-    methods=["GET"]
-)
-def get_video_comments(video_id):
+                await screen.orientation.lock(
+                    "landscape"
+                );
 
-    connection = get_connection()
+            } catch(error) {
 
-    # Make sure the video exists
-    video = connection.execute(
-        """
-        SELECT id
-        FROM videos
-        WHERE id = ?
-        """,
-        (video_id,)
-    ).fetchone()
+                console.log(
+                    "Orientation lock unavailable",
+                    error
+                );
 
-    if not video:
-
-        connection.close()
-
-        return jsonify({
-            "success": False,
-            "error": "Video not found"
-        }), 404
-
-    rows = connection.execute(
-        """
-        SELECT
-            comments.id,
-            comments.text,
-            comments.created_at,
-
-            users.id AS user_id,
-            users.username,
-            users.display_name,
-            users.avatar
-
-        FROM comments
-
-        JOIN users
-            ON users.id = comments.user_id
-
-        WHERE comments.video_id = ?
-
-        ORDER BY comments.created_at ASC
-        """,
-        (video_id,)
-    ).fetchall()
-
-    connection.close()
-
-    return jsonify([
-        {
-            "id": row["id"],
-            "text": row["text"],
-            "created_at": row["created_at"],
-            "user_id": row["user_id"],
-            "username": row["username"],
-            "display_name": row["display_name"],
-            "avatar": row["avatar"]
-        }
-        for row in rows
-    ])
-
-
-# ============================================================
-# ADD VIDEO COMMENT
-# ============================================================
-
-@app.route(
-    "/api/videos/<int:video_id>/comments",
-    methods=["POST"]
-)
-@login_required
-def add_video_comment(
-    user,
-    video_id
-):
-
-    data = request.get_json(
-        silent=True
-    ) or {}
-
-    text = str(
-        data.get(
-            "text",
-            ""
-        )
-    ).strip()
-
-    if not text:
-
-        return jsonify({
-            "success": False,
-            "error": "Comment cannot be empty"
-        }), 400
-
-    if len(text) > 1000:
-
-        return jsonify({
-            "success": False,
-            "error": "Comment is too long"
-        }), 400
-
-    connection = get_connection()
-
-    video = connection.execute(
-        """
-        SELECT
-            id,
-            user_id
-        FROM videos
-        WHERE id = ?
-        """,
-        (video_id,)
-    ).fetchone()
-
-    if not video:
-
-        connection.close()
-
-        return jsonify({
-            "success": False,
-            "error": "Video not found"
-        }), 404
-
-    cursor = connection.execute(
-        """
-        INSERT INTO comments
-        (
-            video_id,
-            user_id,
-            text,
-            created_at
-        )
-        VALUES (?, ?, ?, ?)
-        """,
-        (
-            video_id,
-            user["id"],
-            text,
-            now()
-        )
-    )
-
-    # Keep comment count synchronized
-    connection.execute(
-        """
-        UPDATE videos
-        SET comments_count = (
-            SELECT COUNT(*)
-            FROM comments
-            WHERE video_id = ?
-        )
-        WHERE id = ?
-        """,
-        (
-            video_id,
-            video_id
-        )
-    )
-
-    connection.commit()
-
-    comment_id = cursor.lastrowid
-
-    connection.close()
-
-    return jsonify({
-        "success": True,
-        "comment_id": comment_id,
-        "message": "Comment added successfully"
-    }), 201
-
-
-
-
-# ============================================================
-# LIKE / UNLIKE VIDEO
-# ============================================================
-
-@app.route(
-    "/api/videos/<int:video_id>/like",
-    methods=["POST"]
-)
-@login_required
-def like_video(
-    user,
-    video_id
-):
-
-    connection = get_connection()
-
-
-    # --------------------------------------------------------
-    # CHECK VIDEO
-    # --------------------------------------------------------
-
-    video = connection.execute(
-        """
-        SELECT id
-        FROM videos
-        WHERE id = ?
-        """,
-        (
-            video_id,
-        )
-    ).fetchone()
-
-
-    if not video:
-
-        connection.close()
-
-        return jsonify({
-
-            "success": False,
-
-            "error":
-                "Video not found"
-
-        }), 404
-
-
-    # --------------------------------------------------------
-    # CHECK EXISTING LIKE
-    # --------------------------------------------------------
-
-    existing = connection.execute(
-        """
-        SELECT id
-        FROM likes
-
-        WHERE user_id = ?
-          AND video_id = ?
-        """,
-        (
-            user["id"],
-            video_id
-        )
-    ).fetchone()
-
-
-    # --------------------------------------------------------
-    # UNLIKE
-    # --------------------------------------------------------
-
-    if existing:
-
-        connection.execute(
-            """
-            DELETE FROM likes
-
-            WHERE user_id = ?
-              AND video_id = ?
-            """,
-            (
-                user["id"],
-                video_id
-            )
-        )
-
-        liked = False
-
-
-    # --------------------------------------------------------
-    # LIKE
-    # --------------------------------------------------------
-
-    else:
-
-        connection.execute(
-            """
-            INSERT INTO likes
-            (
-                user_id,
-                video_id,
-                created_at
-            )
-
-            VALUES (?, ?, ?)
-            """,
-            (
-                user["id"],
-                video_id,
-                now()
-            )
-        )
-
-        liked = True
-
-
-    # --------------------------------------------------------
-    # RECALCULATE TOTAL
-    # --------------------------------------------------------
-
-    total_likes = connection.execute(
-        """
-        SELECT COUNT(*) AS count
-        FROM likes
-        WHERE video_id = ?
-        """,
-        (
-            video_id,
-        )
-    ).fetchone()["count"]
-
-
-    # Keep videos.likes synchronized
-    connection.execute(
-        """
-        UPDATE videos
-
-        SET likes = ?
-
-        WHERE id = ?
-        """,
-        (
-            total_likes,
-            video_id
-        )
-    )
-
-
-    connection.commit()
-
-    connection.close()
-
-
-    return jsonify({
-
-        "success": True,
-
-        "liked":
-            liked,
-
-        "likes":
-            total_likes
-
-    })
-
-
-
-
-
-# ============================================================
-# SERVE VIDEO FILE
-# ============================================================
-
-@app.route(
-    "/media/<path:filename>"
-)
-def media(filename):
-
-    return send_from_directory(
-        config.UPLOAD_FOLDER,
-        filename
-    )
-
-
-# ============================================================
-# CREATOR BOOST
-# ============================================================
-
-@app.route(
-    "/api/creator/boost",
-    methods=["GET"]
-)
-@login_required
-def creator_boost(user):
-
-    connection = get_connection()
-
-    videos = connection.execute(
-        """
-        SELECT
-            id,
-            title,
-            views,
-            likes,
-            comments_count,
-            created_at
-        FROM videos
-        WHERE user_id = ?
-        ORDER BY created_at DESC
-        """,
-        (
-            user["id"],
-        )
-    ).fetchall()
-
-    connection.close()
-
-    total_score = 0
-
-    best_video = None
-    best_score = 0
-
-    current_time = now()
-
-    video_results = []
-
-    for video in videos:
-
-        views = int(
-            video["views"] or 0
-        )
-
-        likes = int(
-            video["likes"] or 0
-        )
-
-        comments = int(
-            video["comments_count"] or 0
-        )
-
-        age_seconds = max(
-            0,
-            current_time -
-            int(
-                video["created_at"] or
-                current_time
-            )
-        )
-
-        age_hours = (
-            age_seconds / 3600
-        )
-
-        freshness = max(
-            0,
-            100 -
-            (age_hours * 2)
-        )
-
-        score = (
-            views * 1
-            +
-            likes * 5
-            +
-            comments * 8
-            +
-            freshness
-        )
-
-        score = int(
-            round(score)
-        )
-
-        total_score += score
-
-        if score > best_score:
-
-            best_score = score
-
-            best_video = {
-                "id":
-                    video["id"],
-
-                "title":
-                    video["title"],
-
-                "score":
-                    score,
-
-                "views":
-                    views,
-
-                "likes":
-                    likes,
-
-                "comments":
-                    comments
             }
 
-        video_results.append({
-
-            "id":
-                video["id"],
-
-            "title":
-                video["title"],
-
-            "score":
-                score,
-
-            "views":
-                views,
-
-            "likes":
-                likes,
-
-            "comments":
-                comments
-
-        })
-
-    # --------------------------------------------------------
-    # BOOST LEVEL
-    # --------------------------------------------------------
-
-    if total_score >= 300:
-
-        level = 3
-        level_name = "🌟 Level 3"
-
-    elif total_score >= 150:
-
-        level = 2
-        level_name = "🔥 Level 2"
-
-    elif total_score >= 50:
-
-        level = 1
-        level_name = "🚀 Level 1"
-
-    else:
-
-        level = 0
-        level_name = "🌱 New Creator"
-
-    # --------------------------------------------------------
-    # NEXT LEVEL
-    # --------------------------------------------------------
-
-    if level == 0:
-
-        next_score = 50
-
-    elif level == 1:
-
-        next_score = 150
-
-    elif level == 2:
-
-        next_score = 300
-
-    else:
-
-        next_score = None
-
-    return jsonify({
-
-        "success":
-            True,
-
-        "boost": {
-
-            "score":
-                int(total_score),
-
-            "level":
-                level,
-
-            "level_name":
-                level_name,
-
-            "next_score":
-                next_score,
-
-            "best_video":
-                best_video,
-
-            "videos":
-                video_results
         }
 
-    })
+    } catch(error) {
 
-# ============================================================
-# CREATOR STUDIO ANALYTICS
-# ============================================================
+        console.log(
+            "Fullscreen error:",
+            error
+        );
 
-@app.route(
-    "/api/creator/studio",
-    methods=["GET"]
-)
-@login_required
-def creator_studio(user):
+    }
 
-    connection = get_connection()
+}
 
-    # --------------------------------------------------------
-    # VIDEO COUNT + TOTAL VIEWS
-    # --------------------------------------------------------
 
-    video_stats = connection.execute(
-        """
-        SELECT
-            COUNT(*) AS video_count,
-            COALESCE(SUM(views), 0) AS total_views
-        FROM videos
-        WHERE user_id = ?
-        """,
-        (user["id"],)
-    ).fetchone()
 
-    # --------------------------------------------------------
-    # TOTAL LIKES
-    # --------------------------------------------------------
+/* =========================================================
+   OPEN VIDEO
+========================================================= */
 
-    like_stats = connection.execute(
-        """
-        SELECT
-            COALESCE(SUM(likes), 0) AS total_likes
-        FROM videos
-        WHERE user_id = ?
-        """,
-        (user["id"],)
-    ).fetchone()
+async function openVideo(
+    video
+) {
 
-    # --------------------------------------------------------
-    # FOLLOWERS
-    # --------------------------------------------------------
+    console.log("VIDEO DATA:", video);
 
-    follower_stats = connection.execute(
-        """
-        SELECT
-            COUNT(*) AS follower_count
-        FROM followers
-        WHERE following_id = ?
-        """,
-        (user["id"],)
-    ).fetchone()
+    state.currentVideo =
+        video;
 
-    # --------------------------------------------------------
-    # FOLLOWING
-    # --------------------------------------------------------
+    if(video.source === "youtube"){
 
-    following_stats = connection.execute(
-        """
-        SELECT
-            COUNT(*) AS following_count
-        FROM followers
-        WHERE follower_id = ?
-        """,
-        (user["id"],)
-    ).fetchone()
+        openYoutubeVideo(video);
 
-    # --------------------------------------------------------
-    # CREATOR VIDEOS
-    # --------------------------------------------------------
+        return;
 
-    videos = connection.execute(
-        """
-        SELECT
-            id,
-            title,
-            description,
-            filename,
-            thumbnail,
-            views,
-            likes,
-            comments_count,
-            created_at
-        FROM videos
-        WHERE user_id = ?
-        ORDER BY created_at DESC
-        """,
-        (user["id"],)
-    ).fetchall()
+    }
 
-    connection.close()
+    let finalVideo =
+        video;
 
-    return jsonify({
-        "success": True,
+    try {
 
-        "analytics": {
-            "videos":
-                video_stats["video_count"],
+        const {
+            response,
+            data
+        } =
+            await apiRequest(
+                "/api/videos/" +
+                video.id
+            );
 
-            "views":
-                video_stats["total_views"],
+        if (
+            response.ok
+        ) {
 
-            "likes":
-                like_stats["total_likes"],
+            finalVideo =
+                data;
 
-            "followers":
-                follower_stats["follower_count"],
+        }
 
-            "following":
-                following_stats["following_count"]
-        },
+    } catch (
+        error
+    ) {
 
-        "videos": [
+        console.log(
+            "Video details error:",
+            error
+        );
+
+    }
+
+    state.currentVideo =
+        finalVideo;
+
+    const player =
+        $("#mainVideo");
+
+    const videoUrl =
+        finalVideo.video_url
+            ? api(
+                finalVideo.video_url
+            )
+            : "";
+
+    player.src =
+        videoUrl;
+
+
+
+    player.load();
+
+
+    showScreen(
+        "player"
+    );
+
+
+    // Open fullscreen on mobile
+    setTimeout(() => {
+
+        enterVideoFullscreen(
+            player
+        );
+
+    }, 300);
+
+
+
+    $("#playerHeaderTitle")
+        .textContent =
+        finalVideo.title ||
+        "Video";
+
+    $("#playerTitle")
+        .textContent =
+        finalVideo.title ||
+        "Video";
+
+    const creator =
+        finalVideo.creator || {};
+
+    $("#playerCreator")
+        .textContent =
+        "@" +
+        (
+            creator.username ||
+            "creator"
+        );
+
+    $("#playerStats")
+        .innerHTML = `
+
+        👁 ${Number(
+            finalVideo.views || 0
+        )}
+
+        &nbsp;&nbsp;
+
+        ❤️ ${Number(
+            finalVideo.likes || 0
+        )}
+
+        &nbsp;&nbsp;
+
+        💬 ${Number(
+            finalVideo.comments || 0
+        )}
+
+    `;
+
+    $("#playerDescription")
+        .textContent =
+        finalVideo.description ||
+        "";
+
+    showScreen(
+        "player"
+    );
+
+}
+
+
+async function enterVideoFullscreen(element) {
+
+    if (!element) {
+        return;
+    }
+
+    try {
+
+        if (element.requestFullscreen) {
+
+            await element.requestFullscreen();
+
+        } 
+        else if (element.webkitRequestFullscreen) {
+
+            await element.webkitRequestFullscreen();
+
+        }
+
+
+        if (screen.orientation) {
+
+            try {
+
+                await screen.orientation.lock(
+                    "landscape"
+                );
+
+            } catch(error) {
+
+                console.log(
+                    "Orientation lock not supported"
+                );
+
+            }
+
+        }
+
+    } catch(error) {
+
+        console.log(
+            "Fullscreen error:",
+            error
+        );
+
+    }
+
+}
+
+
+function openYoutubeVideo(video){
+
+    state.currentVideo =
+        video;
+
+
+    const player =
+        $("#mainVideo");
+
+
+    player.style.display =
+        "none";
+
+
+    let iframe =
+        document.querySelector(
+            "#youtubePlayer"
+        );
+
+
+    if(!iframe){
+
+        iframe =
+            document.createElement(
+                "iframe"
+            );
+
+        iframe.id =
+            "youtubePlayer";
+
+        iframe.width =
+            "100%";
+
+        iframe.height =
+            "100%";
+
+        iframe.frameBorder =
+            "0";
+
+        iframe.allowFullscreen =
+            true;
+
+        iframe.allow =
+        "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture";
+        
+        iframe.referrerPolicy =
+            "strict-origin-when-cross-origin";
+
+
+        player.parentElement.appendChild(
+            iframe
+        );
+
+    }
+
+
+    iframe.src =
+        "https://www.youtube.com/embed/" +
+        video.youtube_id +
+        "?enablejsapi=1&origin=" +
+        encodeURIComponent(window.location.origin);
+
+    $("#playerHeaderTitle")
+        .textContent =
+        video.title ||
+        "YouTube Video";
+
+
+    $("#playerTitle")
+        .textContent =
+        video.title ||
+        "YouTube Video";
+
+
+    const creator =
+        video.creator || {};
+
+
+    $("#playerCreator")
+        .textContent =
+        "@" +
+        (
+            creator.username ||
+            "youtube"
+        );
+
+
+    $("#playerDescription")
+        .textContent =
+        video.description ||
+        "";
+
+
+    showScreen(
+        "player"
+    );
+    
+    
+    // fullscreen YouTube player
+    setTimeout(() => {
+    
+        enterVideoFullscreen(
+            iframe
+        );
+    
+    }, 500);
+
+}
+
+
+
+/* =========================================================
+   COMMENTS
+========================================================= */
+
+async function loadComments() {
+
+    if (
+        !state.currentVideo
+    ) {
+
+        return;
+
+    }
+
+    const list =
+        $("#commentsList");
+
+    list.innerHTML =
+        "Loading comments...";
+
+    try {
+
+        const {
+            response,
+            data
+        } =
+            await apiRequest(
+                "/api/videos/" +
+                state.currentVideo.id +
+                "/comments"
+            );
+
+        if (
+            !response.ok
+        ) {
+
+            throw new Error(
+                data.error ||
+                "Could not load comments."
+            );
+
+        }
+
+        if (
+            !data.length
+        ) {
+
+            list.innerHTML = `
+                <div
+                    style="
+                        color:#858c99;
+                        padding:10px;
+                    "
+                >
+                    No comments yet.
+                </div>
+            `;
+
+            return;
+
+        }
+
+        list.innerHTML = "";
+
+        data.forEach(
+            comment => {
+
+                const item =
+                    document.createElement(
+                        "div"
+                    );
+
+                item.className =
+                    "comment-item";
+
+                item.innerHTML = `
+
+                    <div class="comment-user">
+
+                        @${escapeHtml(
+                            comment.username ||
+                            "user"
+                        )}
+
+                    </div>
+
+                    <div class="comment-text">
+
+                        ${escapeHtml(
+                            comment.text
+                        )}
+
+                    </div>
+
+                `;
+
+                list.appendChild(
+                    item
+                );
+
+            }
+        );
+
+    } catch (
+        error
+    ) {
+
+        list.innerHTML =
+            "Could not load comments.";
+
+    }
+
+}
+
+
+/* =========================================================
+   SEND COMMENT
+========================================================= */
+
+async function sendComment() {
+
+    if (
+        !state.currentVideo
+    ) {
+
+        return;
+
+    }
+
+    if (
+        !state.token
+    ) {
+
+        showToast(
+            "Login to comment."
+        );
+
+        showScreen(
+            "login"
+        );
+
+        return;
+
+    }
+
+    const input =
+        $("#commentInput");
+
+    const text =
+        input.value.trim();
+
+    if (!text) {
+
+        return;
+
+    }
+
+    const {
+        response,
+        data
+    } =
+        await apiRequest(
+            "/api/videos/" +
+            state.currentVideo.id +
+            "/comments",
             {
-                "id":
-                    video["id"],
+                method: "POST",
 
-                "title":
-                    video["title"],
+                headers: {
+                    "Content-Type":
+                        "application/json"
+                },
 
-                "description":
-                    video["description"],
-
-                "video_url":
-                    "/media/" +
-                    video["filename"],
-
-                "thumbnail":
-                    video["thumbnail"],
-
-                "views":
-                    video["views"],
-
-                "likes":
-                    video["likes"],
-
-                "comments":
-                    video["comments_count"],
-
-                "created_at":
-                    video["created_at"]
+                body:
+                    JSON.stringify({
+                        text
+                    })
             }
+        );
 
-            for video in videos
-        ]
-    })
+    if (
+        response.status === 201
+    ) {
 
+        input.value = "";
 
+        showToast(
+            "Comment added."
+        );
 
+        loadComments();
 
-# ============================================================
-# FOR YOU FEED + CREATOR BOOST
-# ============================================================
+    } else {
 
-@app.route(
-    "/api/feed/for-you",
-    methods=["GET"]
-)
-def for_you_feed():
+        showToast(
+            data.error ||
+            "Could not add comment."
+        );
 
-    connection = get_connection()
+    }
 
-    # --------------------------------------------------------
-    # Get public videos
-    # --------------------------------------------------------
-
-    rows = connection.execute(
-        """
-        SELECT
-
-            videos.id,
-            videos.title,
-            videos.description,
-            videos.filename,
-            videos.thumbnail,
-            videos.views,
-            videos.likes,
-            videos.comments_count,
-            videos.created_at,
-
-            users.id AS user_id,
-            users.username,
-            users.display_name,
-            users.avatar,
-            users.verified
-
-        FROM videos
-
-        JOIN users
-            ON users.id = videos.user_id
-
-        WHERE
-            videos.visibility = 'public'
-
-            AND
-
-            videos.is_short = 0
-
-        ORDER BY
-            videos.created_at DESC
-
-        LIMIT 200
-        """
-    ).fetchall()
+}
 
 
-    # --------------------------------------------------------
-    # Calculate Creator Boost level for every creator
-    # --------------------------------------------------------
+/* =========================================================
+   LIKE
+========================================================= */
 
-    creator_stats = {}
+async function likeCurrentVideo() {
 
-    for video in rows:
+    if (
+        !state.currentVideo
+    ) {
 
-        creator_id = video["user_id"]
+        return;
 
+    }
 
-        views = int(
-            video["views"] or 0
-            )
+    if (
+        !state.token
+    ) {
 
-        likes = int(
-                video["likes"] or 0
-            )
+        showToast(
+            "Login to like videos."
+        );
 
-        comments = int(
-                video["comments_count"] or 0
-            )
+        showScreen(
+            "login"
+        );
 
+        return;
 
-        if creator_id not in creator_stats:
+    }
 
-            creator_stats[
-                creator_id
-            ] = {
-
-                "views": 0,
-
-                "likes": 0,
-
-                "comments": 0
-
+    const {
+        response,
+        data
+    } =
+        await apiRequest(
+            "/api/videos/" +
+            state.currentVideo.id +
+            "/like",
+            {
+                method: "POST"
             }
+        );
+
+    if (
+        response.ok
+    ) {
+
+        state.currentVideo.likes =
+            data.likes;
+
+        $("#playerStats")
+            .innerHTML = `
+
+            👁 ${Number(
+                state.currentVideo.views ||
+                0
+            )}
+
+            &nbsp;&nbsp;
+
+            ❤️ ${Number(
+                data.likes ||
+                0
+            )}
+
+            &nbsp;&nbsp;
+
+            💬 ${Number(
+                state.currentVideo.comments ||
+                0
+            )}
+
+        `;
+
+        $("#likeButton")
+            .textContent =
+            data.liked
+                ? "❤️ Liked"
+                : "❤️ Like";
+
+    } else {
+
+        showToast(
+            data.error ||
+            "Could not like video."
+        );
+
+    }
+
+}
 
 
-        creator_stats[
-            creator_id
-        ]["views"] += views
+/* =========================================================
+   SEARCH
+========================================================= */
 
+async function performSearch() {
 
-        creator_stats[
-            creator_id
-        ]["likes"] += likes
+    const input =
+        $("#searchInput");
 
+    const query =
+        input.value.trim();
 
-        creator_stats[
-            creator_id
-        ]["comments"] += comments
+    const results =
+        $("#searchResults");
 
+    if (!query) {
 
-    # --------------------------------------------------------
-    # Convert score → boost level
-    # --------------------------------------------------------
+        results.innerHTML = `
+            <div class="empty-box">
+                Type something to search.
+            </div>
+        `;
 
-    def get_boost_level(
-        score,
-        total_views,
-        total_likes,
-        total_comments
-    ):
+        return;
 
-        # New creators always receive
-        # an initial discovery opportunity.
-        if total_views < 20:
+    }
 
-            return 1
+    results.innerHTML = `
+        <div class="loading-box">
+            <div class="loading-spinner"></div>
+            <div>Searching...</div>
+        </div>
+    `;
 
-        engagement_rate = 0
+    try {
 
-        if total_views > 0:
-
-            engagement_rate = (
-                (
-                    total_likes +
-                    total_comments
+        const {
+            response,
+            data
+        } =
+            await apiRequest(
+                "/api/videos?q=" +
+                encodeURIComponent(
+                    query
                 )
-                /
-                total_views
-            ) * 100
+            );
 
-
-        # Strong engagement
         if (
-            total_views >= 100
-            and engagement_rate >= 8
-        ):
+            !response.ok
+        ) {
 
-            return 3
+            throw new Error(
+                data.error ||
+                "Search failed."
+            );
 
-
-        # Growing creator
-        if (
-            total_views >= 20
-            and engagement_rate >= 5
-        ):
-
-            return 2
-
-
-        # Still eligible for beginner boost
-        return 1
-
-
-    # --------------------------------------------------------
-    # Score each video
-    # --------------------------------------------------------
-
-    current_time = now()
-
-    scored_videos = []
-
-
-    for video in rows:
-
-        views = int(
-            video["views"] or 0
-        )
-
-        likes = int(
-            video["likes"] or 0
-        )
-
-        comments = int(
-            video["comments_count"] or 0
-        )
-
-        created_at = int(
-            video["created_at"] or
-            current_time
-        )
-
-        age_hours = max(
-            0,
-            (
-                current_time -
-                created_at
-            ) / 3600
-        )
-
-
-        # ----------------------------------------------------
-        # Normal recommendation score
-        # ----------------------------------------------------
-
-        engagement_score = (
-            views * 0.5
-            +
-            likes * 5
-            +
-            comments * 8
-        )
-
-
-        freshness_score = max(
-            0,
-            100 -
-            (age_hours * 2)
-        )
-
-
-        # ----------------------------------------------------
-        # Creator boost
-        # ----------------------------------------------------
-
-        creator = creator_stats.get(
-                video["user_id"],
-                {
-                    "views": 0,
-                    "likes": 0,
-                    "comments": 0
-                }
-            )
-
-
-        creator_total_score = (
-            creator["views"]
-            +
-            (
-                creator["likes"]
-                * 5
-            )
-            +
-            (
-                creator["comments"]
-                * 8
-            )
-        )
-
-
-        boost_level = get_boost_level(
-                creator_total_score,
-                creator["views"],
-                creator["likes"],
-                creator["comments"]
-            )
-
-        boost_bonus = {
-            0: 0,
-            1: 40,
-            2: 80,
-            3: 120
-        }.get(
-            boost_level,
-            0
-        )
-
-
-        # ----------------------------------------------------
-        # Beginner protection
-        #
-        # Small creators receive a modest extra chance.
-        # The bonus is capped.
-        # ----------------------------------------------------
-
-        beginner_bonus = 0
-
-        if views < 100:
-
-            beginner_bonus = 35
-
-        elif views < 500:
-
-            beginner_bonus = 15
-
-
-        final_score = (
-            engagement_score
-            +
-            freshness_score
-            +
-            boost_bonus
-            +
-            beginner_bonus
-        )
-
-
-        scored_videos.append({
-
-            "score":
-                final_score,
-
-            "video":
-                video,
-
-            "boost_level":
-                boost_level,
-
-            "boosted":
-                boost_level > 0
-
-        })
-
-
-    # --------------------------------------------------------
-    # Sort recommendations
-    # --------------------------------------------------------
-
-    scored_videos.sort(
-        key=lambda item:
-            item["score"],
-        reverse=True
-    )
-
-
-    # --------------------------------------------------------
-    # Build response
-    # --------------------------------------------------------
-
-    result = []
-
-
-    for item in scored_videos[:100]:
-
-        video = item["video"]
-
-        result.append({
-
-            "id":
-                video["id"],
-
-            "title":
-                video["title"],
-
-            "description":
-                video["description"],
-
-            "video_url":
-                "/media/" +
-                video["filename"],
-
-            "thumbnail":
-                video["thumbnail"],
-
-            "views":
-                video["views"],
-
-            "likes":
-                video["likes"],
-
-            "comments":
-                video["comments_count"],
-
-            "created_at":
-                video["created_at"],
-
-            "boosted":
-                item["boosted"],
-
-            "boost_level":
-                item["boost_level"],
-
-            "creator": {
-
-                "id":
-                    video["user_id"],
-
-                "username":
-                    video["username"],
-
-                "display_name":
-                    video["display_name"],
-
-                "avatar":
-                    video["avatar"],
-
-                "verified":
-                    bool(
-                        video["verified"]
-                    )
-
-            }
-
-        })
-
-
-    return jsonify({
-
-        "success":
-            True,
-
-        "count":
-            len(result),
-
-        "videos":
-            result
-
-    })
-
-
-# ============================================================
-# TRENDING FEED
-# ============================================================
-
-@app.route(
-    "/api/feed/trending",
-    methods=["GET"]
-)
-def trending_feed():
-
-    connection = get_connection()
-
-    videos = connection.execute(
-        """
-        SELECT
-
-            videos.id,
-            videos.title,
-            videos.description,
-            videos.filename,
-            videos.thumbnail,
-            videos.views,
-            videos.likes,
-            videos.comments_count,
-            videos.created_at,
-
-            users.id AS user_id,
-            users.username,
-            users.display_name,
-            users.avatar,
-            users.verified
-
-        FROM videos
-
-        JOIN users
-            ON users.id = videos.user_id
-
-        WHERE
-            videos.visibility = 'public'
-
-            AND
-
-            videos.is_short = 0
-
-        ORDER BY
-            (
-                (videos.views * 1) +
-                (videos.likes * 5) +
-                (videos.comments_count * 3)
-            ) DESC,
-
-            videos.created_at DESC
-
-        LIMIT 100
-        """
-    ).fetchall()
-
-    connection.close()
-
-    result = []
-
-    for video in videos:
-
-        result.append({
-
-            "id":
-                video["id"],
-
-            "title":
-                video["title"],
-
-            "description":
-                video["description"],
-
-            "video_url":
-                "/media/" +
-                video["filename"],
-
-            "thumbnail":
-                video["thumbnail"],
-
-            "views":
-                video["views"],
-
-            "likes":
-                video["likes"],
-
-            "comments":
-                video["comments_count"],
-
-            "created_at":
-                video["created_at"],
-
-            "creator": {
-
-                "id":
-                    video["user_id"],
-
-                "username":
-                    video["username"],
-
-                "display_name":
-                    video["display_name"],
-
-                "avatar":
-                    video["avatar"],
-
-                "verified":
-                    bool(
-                        video["verified"]
-                    )
-
-            }
-
-        })
-
-
-    return jsonify({
-
-        "success":
-            True,
-
-        "count":
-            len(result),
-
-        "videos":
-            result
-
-    })
-
-
-
-# ============================================================
-# SHORTS FEED
-# ============================================================
-
-@app.route(
-    "/api/shorts",
-    methods=["GET"]
-)
-def shorts():
-
-    connection = get_connection()
-
-    rows = connection.execute(
-        """
-        SELECT
-
-            videos.id,
-            videos.title,
-            videos.description,
-            videos.filename,
-            videos.thumbnail,
-            videos.views,
-            videos.likes,
-            videos.created_at,
-            videos.is_short,
-
-            users.id AS user_id,
-            users.username,
-            users.display_name,
-            users.avatar
-
-        FROM videos
-
-        JOIN users
-            ON users.id = videos.user_id
-
-        WHERE
-            videos.visibility = 'public'
-
-            AND
-
-            videos.is_short = 1
-
-        ORDER BY
-            videos.created_at DESC
-
-        LIMIT 50
-        """
-    ).fetchall()
-
-    connection.close()
-
-    result = []
-
-    for video in rows:
-
-        result.append({
-
-            "id":
-                video["id"],
-
-            "title":
-                video["title"],
-
-            "description":
-                video["description"],
-
-            "video_url":
-                "/media/" +
-                video["filename"],
-
-            "thumbnail":
-                video["thumbnail"],
-
-            "views":
-                video["views"],
-
-            "likes":
-                video["likes"],
-
-            "created_at":
-                video["created_at"],
-
-            "creator": {
-
-                "id":
-                    video["user_id"],
-
-                "username":
-                    video["username"],
-
-                "display_name":
-                    video["display_name"],
-
-                "avatar":
-                    video["avatar"]
-            }
-
-        })
-
-    return jsonify({
-
-        "success":
-            True,
-
-        "count":
-            len(result),
-
-        "shorts":
-            result
-
-    })
-
-
-
-@app.route("/api/debug/videos")
-def debug_videos():
-
-    connection=get_connection()
-
-    rows=connection.execute(
-        """
-        SELECT
-            id,
-            title,
-            filename,
-            is_short,
-            visibility,
-            video_type
-        FROM videos
-        ORDER BY id DESC
-        """
-    ).fetchall()
-
-    connection.close()
-
-    return jsonify([
-        {
-            "id":row["id"],
-            "title":row["title"],
-            "filename":row["filename"],
-            "is_short":row["is_short"],
-            "visibility":row["visibility"],
-            "video_type":row["video_type"]
         }
-        for row in rows
-    ])
+
+        renderVideos(
+            results,
+            data.videos || []
+        );
+
+    } catch (
+        error
+    ) {
+
+        results.innerHTML = `
+            <div class="empty-box">
+
+                ${escapeHtml(
+                    error.message
+                )}
+
+            </div>
+        `;
+
+    }
+
+}
 
 
-# ============================================================
-# ERROR HANDLERS
-# ============================================================
+/* =========================================================
+   LOGIN
+========================================================= */
 
-@app.errorhandler(413)
-def file_too_large(error):
+async function login() {
 
-    return jsonify({
+    const loginValue =
+        $("#loginValue")
+            .value
+            .trim();
 
-        "success": False,
+    const password =
+        $("#loginPassword")
+            .value;
 
-        "error":
-            "Video is too large. Maximum upload size is 500 MB."
+    const status =
+        $("#loginStatus");
 
-    }), 413
+    if (
+        !loginValue ||
+        !password
+    ) {
+
+        status.textContent =
+            "Enter your login and password.";
+
+        return;
+
+    }
+
+    status.textContent =
+        "Logging in...";
+
+    try {
+
+        const {
+            response,
+            data
+        } =
+            await apiRequest(
+                "/api/auth/login",
+                {
+                    method: "POST",
+
+                    headers: {
+                        "Content-Type":
+                            "application/json"
+                    },
+
+                    body:
+                        JSON.stringify({
+                            login:
+                                loginValue,
+
+                            password:
+                                password
+                        })
+                }
+            );
+
+        if (
+            response.ok
+        ) {
+
+            saveLogin(
+                data.token,
+                data.user
+            );
+
+            status.textContent =
+                "";
+
+            $("#loginPassword")
+                .value = "";
+
+            updateProfileUI();
+
+            showToast(
+                "Login successful."
+            );
+
+            showScreen(
+                "home"
+            );
+
+        } else {
+
+            status.textContent =
+                data.error ||
+                "Login failed.";
+
+        }
+
+    } catch (
+        error
+    ) {
+
+        status.textContent =
+            error.message;
+
+    }
+
+}
 
 
-@app.errorhandler(404)
-def not_found(error):
+/* =========================================================
+   REGISTER
+========================================================= */
 
-    return jsonify({
+async function register() {
 
-        "success": False,
+    const username =
+        $("#registerUsername")
+            .value
+            .trim();
 
-        "error":
-            "The requested endpoint was not found",
+    const email =
+        $("#registerEmail")
+            .value
+            .trim();
 
-        "path":
-            request.path
+    const displayName =
+        $("#registerDisplayName")
+            .value
+            .trim();
 
-    }), 404
+    const password =
+        $("#registerPassword")
+            .value;
+
+    const status =
+        $("#registerStatus");
+
+    if (
+        !username ||
+        !email ||
+        !password
+    ) {
+
+        status.textContent =
+            "Username, email and password are required.";
+
+        return;
+
+    }
+
+    status.textContent =
+        "Creating account...";
+
+    try {
+
+        const {
+            response,
+            data
+        } =
+            await apiRequest(
+                "/api/auth/register",
+                {
+                    method: "POST",
+
+                    headers: {
+                        "Content-Type":
+                            "application/json"
+                    },
+
+                    body:
+                        JSON.stringify({
+
+                            username,
+
+                            email,
+
+                            display_name:
+                                displayName,
+
+                            password
+
+                        })
+                }
+            );
+
+        if (
+            response.status === 201
+        ) {
+
+            saveLogin(
+                data.token,
+                data.user
+            );
+
+            status.textContent =
+                "";
+
+            updateProfileUI();
+
+            showToast(
+                "Welcome to Creator!"
+            );
+
+            showScreen(
+                "home"
+            );
+
+        } else {
+
+            status.textContent =
+                data.error ||
+                "Could not create account.";
+
+        }
+
+    } catch (
+        error
+    ) {
+
+        status.textContent =
+            error.message;
+
+    }
+
+}
 
 
-# ============================================================
-# START SERVER
-# ============================================================
+/* =========================================================
+   PROFILE
+========================================================= */
 
-if __name__ == "__main__":
+async function loadProfile() {
 
-    print()
-    print("=" * 60)
-    print("       CREATOR PLATFORM SERVER")
-    print("=" * 60)
-    print()
+    updateProfileUI();
 
-    print("Initializing database...")
+    if (
+        !state.token
+    ) {
 
-    initialize_database()
+        return;
 
-    print("Database ready.")
+    }
 
-    print()
+    const username =
+        state.user &&
+        state.user.username;
 
-    print(
-        "Database tables:"
-    )
+    if (!username) {
 
-    for table in database_test():
+        return;
 
-        print(
-            "  ✓",
-            table
+    }
+
+    try {
+
+        const {
+            response,
+            data
+        } =
+            await apiRequest(
+                "/api/users/" +
+                encodeURIComponent(
+                    username
+                )
+            );
+
+        if (
+            response.ok
+        ) {
+
+            const user =
+                data.user || {};
+
+            $("#profileVideos")
+                .textContent =
+                data.videos
+                    ? data.videos.length
+                    : 0;
+
+            $("#profileFollowers")
+                .textContent =
+                user.followers ||
+                0;
+
+            $("#profileFollowing")
+                .textContent =
+                user.following ||
+                0;
+
+            renderVideos(
+                $("#profileVideosList"),
+                data.videos || []
+            );
+
+        }
+
+    } catch (
+        error
+    ) {
+
+        console.log(
+            "Profile error:",
+            error
+        );
+
+    }
+
+}
+
+
+/* =========================================================
+   UPDATE PROFILE UI
+========================================================= */
+
+function updateProfileUI() {
+
+    if (
+        state.user &&
+        state.token
+    ) {
+
+        $("#profileUsername")
+            .textContent =
+            "@" +
+            (
+                state.user.username ||
+                "creator"
+            );
+
+        $("#profileDisplayName")
+            .textContent =
+            state.user.display_name ||
+            "Creator";
+
+        $("#profileBio")
+            .textContent =
+            state.user.bio ||
+            "No bio yet.";
+
+        $("#profileLoginButton")
+            .textContent =
+            "LOGOUT";
+
+    } else {
+
+        $("#profileUsername")
+            .textContent =
+            "@guest";
+
+        $("#profileDisplayName")
+            .textContent =
+            "Guest";
+
+        $("#profileBio")
+            .textContent =
+            "Login to see your creator profile.";
+
+        $("#profileLoginButton")
+            .textContent =
+            "LOGIN";
+
+        $("#profileVideos")
+            .textContent =
+            "0";
+
+        $("#profileFollowers")
+            .textContent =
+            "0";
+
+        $("#profileFollowing")
+            .textContent =
+            "0";
+
+    }
+
+}
+
+/* =========================================================
+   UPLOAD
+========================================================= */
+
+function setupUpload() {
+
+    const input =
+        $("#videoFileInput");
+
+    const fileText =
+        $("#selectedFileText");
+
+    input.addEventListener(
+        "change",
+        () => {
+
+            const file =
+                input.files[0];
+
+            if (!file) {
+
+                fileText.textContent =
+                    "MP4, WebM, MOV and other video formats";
+
+                return;
+
+            }
+
+            const size =
+                (
+                    file.size /
+                    1024 /
+                    1024
+                ).toFixed(
+                    1
+                );
+
+            fileText.textContent =
+                file.name +
+                " • " +
+                size +
+                " MB";
+
+        }
+    );
+
+    /* -------------------------------------------------------
+       THUMBNAIL SELECTION
+    ------------------------------------------------------- */
+
+    const thumbnailInput =
+        $("#thumbnailFileInput");
+
+    const thumbnailText =
+        $("#thumbnailFileText");
+
+    const thumbnailPreview =
+        $("#thumbnailPreview");
+
+    const thumbnailPreviewImage =
+        $("#thumbnailPreviewImage");
+
+
+    thumbnailInput.addEventListener(
+        "change",
+        () => {
+
+            const file =
+                thumbnailInput.files[0];
+
+            if (!file) {
+
+                thumbnailText.textContent =
+                    "Optional — JPG, PNG or WebP";
+
+                thumbnailPreview.classList.add(
+                    "hidden"
+                );
+
+                thumbnailPreviewImage.src =
+                    "";
+
+                return;
+            }
+
+
+            thumbnailText.textContent =
+                file.name;
+
+
+            const reader =
+                new FileReader();
+
+
+            reader.onload =
+                event => {
+
+                    thumbnailPreviewImage.src =
+                        event.target.result;
+
+                    thumbnailPreview.classList.remove(
+                        "hidden"
+                    );
+
+                };
+
+
+            reader.readAsDataURL(
+                file
+            );
+
+        }
+    );
+
+}
+
+
+/* =========================================================
+   VIDEO UPLOAD WITH PROGRESS
+========================================================= */
+let isShort = false;
+function uploadVideo() {
+
+    if (
+        !state.token
+    ) {
+
+        showToast(
+            "Login before uploading."
+        );
+
+        showScreen(
+            "login"
+        );
+
+        return;
+
+    }
+
+    const file =
+        $("#videoFileInput")
+            .files[0];
+    const thumbnailFile =
+        $("#thumbnailFileInput")
+            .files[0];
+
+    const title =
+        $("#videoTitleInput")
+            .value
+            .trim();
+
+    const description =
+        $("#videoDescriptionInput")
+            .value
+            .trim();
+
+    const status =
+        $("#uploadStatus");
+
+    if (!file) {
+
+        status.textContent =
+            "Choose a video first.";
+
+        return;
+
+    }
+
+    if (!title) {
+
+        status.textContent =
+            "Enter a video title.";
+
+        return;
+
+    }
+
+    const formData =
+        new FormData();
+
+    formData.append(
+        "video",
+        file
+    );
+
+    let type = "video";
+
+
+    if(
+        document.getElementById("shortsCheckbox").checked
+    ){
+        type = "short";
+    }
+
+
+    formData.append(
+        "content_type",
+        type
+    );
+    
+    formData.append(
+        "title",
+        title
+    );
+    
+    formData.append(
+        "description",
+        description
+    );
+
+    // formData.append(
+    //     "is_short",
+    //     isShort ? "true" : "false"
+    // );
+    formData.append(
+        "is_short",
+        "true"
+    );
+    formData.append(
+        "is_short",
+        "false"
+    );
+    
+    if (thumbnailFile) {
+    
+        formData.append(
+            "thumbnail",
+            thumbnailFile
+        );
+    
+    }
+
+    const xhr =
+        new XMLHttpRequest();
+
+    xhr.open(
+        "POST",
+        api(
+            "/api/videos"
         )
+    );
 
-    print()
+    xhr.setRequestHeader(
+        "Authorization",
+        "Bearer " +
+        state.token
+    );
 
-    print(
-        "Server:"
+    $(".upload-progress")
+        .classList.remove(
+            "hidden"
+        );
+
+    status.textContent =
+        "";
+
+    $("#uploadProgressBar")
+        .style.width =
+        "0%";
+
+    xhr.upload.addEventListener(
+        "progress",
+        event => {
+
+            if (
+                event.lengthComputable
+            ) {
+
+                const percent =
+                    (
+                        event.loaded /
+                        event.total
+                    ) *
+                    100;
+
+                $("#uploadProgressBar")
+                    .style.width =
+                    percent +
+                    "%";
+
+                $("#uploadProgressText")
+                    .textContent =
+                    "Uploading " +
+                    Math.round(
+                        percent
+                    ) +
+                    "%";
+
+            }
+
+        }
+    );
+
+    xhr.addEventListener(
+        "load",
+        () => {
+
+            $(".upload-progress")
+                .classList.add(
+                    "hidden"
+                );
+
+            let data = {};
+
+            try {
+
+                data =
+                    JSON.parse(
+                        xhr.responseText
+                    );
+
+            } catch (
+                error
+            ) {}
+
+            if (
+                xhr.status === 201
+            ) {
+
+                status.textContent =
+                    "Video uploaded successfully!";
+
+                $("#videoFileInput")
+                    .value = "";
+
+                $("#videoTitleInput")
+                    .value = "";
+
+                $("#videoDescriptionInput")
+                    .value = "";
+
+                $("#selectedFileText")
+                    .textContent =
+                    "MP4, WebM, MOV and other video formats";
+         
+
+                $("#thumbnailFileInput")
+                .value = "";
+                
+                $("#thumbnailFileText")
+                    .textContent =
+                    "Optional — JPG, PNG or WebP";
+                
+                $("#thumbnailPreview")
+                    .classList.add(
+                        "hidden"
+                    );
+                
+                $("#thumbnailPreviewImage")
+                    .src = "";
+
+
+                showToast(
+                    "Video uploaded!"
+                );
+
+                setTimeout(
+                    () => {
+
+                        showScreen(
+                            "home"
+                        );
+
+                    },
+                    700
+                );
+
+            } else {
+
+                status.textContent =
+                    data.error ||
+                    "Upload failed.";
+
+            }
+
+        }
+    );
+
+    xhr.addEventListener(
+        "error",
+        () => {
+
+            $(".upload-progress")
+                .classList.add(
+                    "hidden"
+                );
+
+            status.textContent =
+                "Network error during upload.";
+
+        }
+    );
+
+    xhr.send(
+        formData
+    );
+
+}
+
+
+/* =========================================================
+   SHARE
+========================================================= */
+
+async function shareVideo() {
+
+    if (
+        !state.currentVideo
+    ) {
+
+        return;
+
+    }
+
+    const url =
+        window.location.origin +
+        "/media/" +
+        state.currentVideo.video_url
+            .replace(
+                "/media/",
+                ""
+            );
+
+    if (
+        navigator.share
+    ) {
+
+        try {
+
+            await navigator.share({
+
+                title:
+                    state.currentVideo.title,
+
+                text:
+                    state.currentVideo.description ||
+                    "Check out this video!",
+
+                url
+
+            });
+
+        } catch (
+            error
+        ) {
+
+            // User cancelled share.
+
+        }
+
+    } else {
+
+        try {
+
+            await navigator.clipboard.writeText(
+                window.location.origin +
+                state.currentVideo.video_url
+            );
+
+            showToast(
+                "Video link copied."
+            );
+
+        } catch (
+            error
+        ) {
+
+            showToast(
+                "Sharing is not supported here."
+            );
+
+        }
+
+    }
+
+}
+
+
+/* =========================================================
+   HTML SAFETY
+========================================================= */
+
+function escapeHtml(
+    value
+) {
+
+    return String(
+        value
     )
+        .replace(
+            /&/g,
+            "&amp;"
+        )
+        .replace(
+            /</g,
+            "&lt;"
+        )
+        .replace(
+            />/g,
+            "&gt;"
+        )
+        .replace(
+            /"/g,
+            "&quot;"
+        )
+        .replace(
+            /'/g,
+            "&#039;"
+        );
 
-    print(
-        "  http://127.0.0.1:5000"
+}
+
+function escapeAttribute(
+    value
+) {
+
+    return escapeHtml(
+        value
+    );
+
+}
+
+
+/* =========================================================
+   EVENT LISTENERS
+========================================================= */
+
+function setupNavigation() {
+
+    $all(
+        ".nav-button, .nav-create-button"
     )
+        .forEach(
+            button => {
 
-    print()
+                button.addEventListener(
+                    "click",
+                    () => {
 
-    print(
-        "API:"
+                        showScreen(
+                            button.dataset.screen
+                        );
+
+                    }
+                );
+
+            }
+        );
+
+}
+
+
+function setupTopButtons() {
+
+    $("#searchTopButton")
+        .addEventListener(
+            "click",
+            () => {
+
+                showScreen(
+                    "search"
+                );
+
+                $("#searchInput")
+                    .focus();
+
+            }
+        );
+
+    $("#profileTopButton")
+        .addEventListener(
+            "click",
+            () => {
+
+                showScreen(
+                    "profile"
+                );
+
+            }
+        );
+
+}
+
+
+function setupTabs() {
+
+    $all(
+        ".feed-tab"
     )
+        .forEach(
+            button => {
 
-    print(
-        "  http://127.0.0.1:5000/api/health"
+                button.addEventListener(
+                    "click",
+                    () => {
+
+                        $all(
+                            ".feed-tab"
+                        )
+                            .forEach(
+                                item =>
+                                item.classList.remove(
+                                    "active"
+                                )
+                            );
+
+                        button.classList.add(
+                            "active"
+                        );
+
+                        if (
+                            button.dataset.feed ===
+                            "for-you"
+                        ) {
+                        
+                            loadForYouFeed();
+                        
+                        }
+                        
+                        
+                        else if (
+                            button.dataset.feed ===
+                            "following"
+                        ) {
+                        
+                            loadFollowingFeed();
+                        
+                        }
+                        
+                        
+                        else if (
+                            button.dataset.feed ===
+                            "trending"
+                        ) {
+                        
+                            loadTrendingFeed();
+                        
+                        }
+
+                    }
+                );
+
+            }
+        );
+
+}
+
+
+function setupButtons() {
+
+    $("#searchBackButton")
+        .addEventListener(
+            "click",
+            () => {
+                showScreen(
+                    "home"
+                );
+            }
+        );
+
+    $("#playerBackButton")
+        .addEventListener(
+            "click",
+            () => {
+
+                const video =
+                    $("#mainVideo");
+
+                video.pause();
+
+                video.removeAttribute(
+                    "src"
+                );
+
+                video.load();
+
+                showScreen(
+                    "home"
+                );
+
+            }
+        );
+
+    $("#searchButton")
+        .addEventListener(
+            "click",
+            performSearch
+        );
+
+    $("#searchInput")
+        .addEventListener(
+            "keydown",
+            event => {
+
+                if (
+                    event.key ===
+                    "Enter"
+                ) {
+
+                    performSearch();
+
+                }
+
+            }
+        );
+
+    $("#likeButton")
+        .addEventListener(
+            "click",
+            likeCurrentVideo
+        );
+
+    $("#commentButton")
+        .addEventListener(
+            "click",
+            () => {
+
+                const panel =
+                    $("#commentsPanel");
+
+                panel.classList.toggle(
+                    "hidden"
+                );
+
+                if (
+                    !panel.classList.contains(
+                        "hidden"
+                    )
+                ) {
+
+                    loadComments();
+
+                }
+
+            }
+        );
+
+    $("#sendCommentButton")
+        .addEventListener(
+            "click",
+            sendComment
+        );
+
+    $("#commentInput")
+        .addEventListener(
+            "keydown",
+            event => {
+
+                if (
+                    event.key ===
+                    "Enter"
+                ) {
+
+                    sendComment();
+
+                }
+
+            }
+        );
+
+    $("#shareButton")
+        .addEventListener(
+            "click",
+            shareVideo
+        );
+
+    $("#loginButton")
+        .addEventListener(
+            "click",
+            login
+        );
+
+    $("#registerButton")
+        .addEventListener(
+            "click",
+            register
+        );
+
+    $("#openRegisterButton")
+        .addEventListener(
+            "click",
+            () => {
+
+                showScreen(
+                    "register"
+                );
+
+            }
+        );
+
+    $("#openLoginButton")
+        .addEventListener(
+            "click",
+            () => {
+
+                showScreen(
+                    "login"
+                );
+
+            }
+        );
+
+    $("#profileLoginButton")
+        .addEventListener(
+            "click",
+            () => {
+
+                if (
+                    state.token
+                ) {
+
+                    logoutLocal();
+
+                    showToast(
+                        "Logged out."
+                    );
+
+                    updateProfileUI();
+
+                } else {
+
+                    showScreen(
+                        "login"
+                    );
+
+                }
+
+            }
+        );
+
+    $("#uploadVideoButton")
+        .addEventListener(
+            "click",
+            uploadVideo
+        );
+    
+
+    $("#openStudioButton")
+    .addEventListener(
+        "click",
+        () => {
+
+            showScreen(
+                "studio"
+            );
+
+        }
+    );
+
+    $("#studioBackButton")
+        .addEventListener(
+            "click",
+            () => {
+
+                showScreen(
+                    "profile"
+                );
+
+            }
+        );
+
+    $("#studioUploadButton")
+        .addEventListener(
+            "click",
+            () => {
+
+                showScreen(
+                    "create"
+                );
+
+            }
+        );
+
+
+    $("#markNotificationsRead")
+    .addEventListener(
+        "click",
+        async () => {
+
+            if (!state.token) {
+                return;
+            }
+
+            await apiRequest(
+                "/api/notifications/read",
+                {
+                    method:
+                        "POST"
+                }
+            );
+
+            loadNotifications();
+
+            showToast(
+                "Notifications marked as read."
+            );
+
+        }
+    );
+
+    /* =====================================================
+       PUBLIC CREATOR PROFILE
+    ====================================================== */
+
+    const creatorProfileBackButton =
+        $("#creatorProfileBackButton");
+
+    if (
+        creatorProfileBackButton
+    ) {
+
+        creatorProfileBackButton
+            .addEventListener(
+                "click",
+                () => {
+
+                    showScreen(
+                        "home"
+                    );
+
+                }
+            );
+
+    }
+
+
+    const creatorFollowButton =
+        $("#creatorFollowButton");
+
+    if (
+        creatorFollowButton
+    ) {
+
+        creatorFollowButton
+            .addEventListener(
+                "click",
+                toggleCreatorFollow
+            );
+
+    }
+
+
+}
+
+
+/* =========================================================
+   INITIALIZATION
+========================================================= */
+
+function initializeApp() {
+
+    setupNavigation();
+
+    setupTopButtons();
+
+    setupTabs();
+
+    setupButtons();
+
+    setupUpload();
+
+    updateProfileUI();
+
+    showScreen(
+        "home"
+    );
+
+}
+
+
+document.addEventListener(
+    "DOMContentLoaded",
+    initializeApp
+);
+
+/* =========================================================
+   CREATOR STUDIO
+========================================================= */
+
+async function loadCreatorStudio() {
+
+    if (!state.token) {
+
+        showToast(
+            "Login to access Creator Studio."
+        );
+
+        showScreen(
+            "login"
+        );
+
+        return;
+    }
+
+    $("#studioVideos")
+        .textContent = "—";
+
+    $("#studioViews")
+        .textContent = "—";
+
+    $("#studioLikes")
+        .textContent = "—";
+
+    $("#studioFollowers")
+        .textContent = "—";
+
+    $("#studioVideosList")
+        .innerHTML = `
+            <div class="loading-box">
+                <div class="loading-spinner"></div>
+                <div>Loading studio...</div>
+            </div>
+        `;
+
+    try {
+
+        const {
+            response,
+            data
+        } = await apiRequest(
+            "/api/creator/studio"
+        );
+
+        if (!response.ok) {
+
+            throw new Error(
+                data.error ||
+                "Could not load Creator Studio."
+            );
+        }
+
+        const analytics =
+            data.analytics || {};
+
+        $("#studioVideos")
+            .textContent =
+            Number(
+                analytics.videos || 0
+            );
+
+        $("#studioViews")
+            .textContent =
+            Number(
+                analytics.views || 0
+            );
+
+        $("#studioLikes")
+            .textContent =
+            Number(
+                analytics.likes || 0
+            );
+
+        $("#studioFollowers")
+            .textContent =
+            Number(
+                analytics.followers || 0
+            );
+
+        renderStudioVideos(
+            data.videos || []
+        );
+
+    } catch (error) {
+
+        $("#studioVideosList")
+            .innerHTML = `
+                <div class="empty-box">
+                    ${escapeHtml(
+                        error.message
+                    )}
+                </div>
+            `;
+    }
+}
+
+
+/* =========================================================
+   RENDER STUDIO VIDEOS
+========================================================= */
+
+function renderStudioVideos(
+    videos
+) {
+
+    const container =
+        $("#studioVideosList");
+
+    container.innerHTML = "";
+
+    if (!videos.length) {
+
+        container.innerHTML = `
+            <div class="empty-box">
+
+                🎬
+
+                <div>
+                    You haven't uploaded any videos yet.
+                </div>
+
+            </div>
+        `;
+
+        return;
+    }
+
+    videos.forEach(
+        video => {
+
+            const item =
+                document.createElement(
+                    "div"
+                );
+
+            item.className =
+                "studio-video-item";
+
+            const thumbnail =
+                video.thumbnail
+                    ? api(
+                        video.thumbnail
+                    )
+                    : "";
+
+            item.innerHTML = `
+
+                <div class="studio-video-thumb">
+
+                    ${
+                        thumbnail
+                        ? `
+                            <img
+                                src="${escapeAttribute(
+                                    thumbnail
+                                )}"
+                                alt=""
+                            >
+                        `
+                        : `
+                            🎬
+                        `
+                    }
+
+                </div>
+
+                <div class="studio-video-info">
+
+                    <div class="studio-video-title">
+
+                        ${escapeHtml(
+                            video.title ||
+                            "Untitled"
+                        )}
+
+                    </div>
+
+                    <div class="studio-video-stats">
+
+                        👁 ${Number(
+                            video.views || 0
+                        )}
+
+                        &nbsp; ❤️ ${Number(
+                            video.likes || 0
+                        )}
+
+                        &nbsp; 💬 ${Number(
+                            video.comments || 0
+                        )}
+
+                    </div>
+
+                    <button
+                        class="studio-delete"
+                        data-video-id="${video.id}"
+                    >
+                        Manage video
+                    </button>
+
+                    <button 
+                        class="delete-video-btn"
+                        onclick="deleteVideo(${video.id})">
+                        🗑 Delete
+                    </button>
+
+                </div>
+
+                
+
+            `;
+
+            const manage =
+                item.querySelector(
+                    ".studio-delete"
+                );
+
+            manage.addEventListener(
+                "click",
+                () => {
+
+                    openVideo(
+                        video
+                    );
+
+                }
+            );
+
+            container.appendChild(
+                item
+            );
+
+        }
+    );
+}
+
+/* =========================================================
+   SHORTS SYSTEM
+========================================================= */
+
+let shortsVideos = [];
+
+let shortsObserver = null;
+
+let viewedShorts = new Set();
+
+let currentShortVideo = null;
+
+
+/* =========================================================
+   LOAD SHORTS
+========================================================= */
+
+async function loadShorts() {
+
+    const feed = $("#shortsFeed");
+
+    if (!feed) {
+        return;
+    }
+
+    feed.innerHTML = `
+        <div class="shorts-loading">
+
+            <div class="loading-spinner"></div>
+
+            <div>
+                Loading Shorts...
+            </div>
+
+        </div>
+    `;
+
+    try {
+
+        const {
+            response,
+            data
+        } = await apiRequest(
+            "/api/videos"
+        );
+
+        if (!response.ok) {
+
+            throw new Error(
+                data.error ||
+                "Could not load Shorts."
+            );
+
+        }
+
+        shortsVideos =
+            data.videos || [];
+
+        renderShorts(
+            shortsVideos
+        );
+
+    } catch (error) {
+
+        console.error(
+            "Shorts loading error:",
+            error
+        );
+
+        feed.innerHTML = `
+            <div class="shorts-loading">
+
+                <div
+                    style="font-size:40px"
+                >
+                    ❌
+                </div>
+
+                <div>
+                    Could not load Shorts.
+                </div>
+
+                <div
+                    style="
+                        color:#777f8c;
+                        font-size:12px;
+                        margin-top:5px;
+                        text-align:center;
+                        padding:0 20px;
+                    "
+                >
+                    ${escapeHtml(
+                        error.message
+                    )}
+                </div>
+
+                <button
+                    class="primary-button"
+                    style="
+                        width:200px;
+                        margin-top:12px;
+                    "
+                    onclick="loadShorts()"
+                >
+                    Retry
+                </button>
+
+            </div>
+        `;
+
+    }
+
+}
+
+
+/* =========================================================
+   RENDER SHORTS
+========================================================= */
+
+function renderShorts(
+    videos
+) {
+
+    const feed =
+        $("#shortsFeed");
+
+    if (!feed) {
+        return;
+    }
+
+    feed.innerHTML = "";
+
+    if (!videos.length) {
+
+        feed.innerHTML = `
+            <div class="shorts-loading">
+
+                <div
+                    style="font-size:45px"
+                >
+                    🎬
+                </div>
+
+                <div>
+                    No Shorts yet.
+                </div>
+
+                <button
+                    class="primary-button"
+                    style="
+                        width:220px;
+                        margin-top:10px;
+                    "
+                    onclick="showScreen('create')"
+                >
+                    Upload a Video
+                </button>
+
+            </div>
+        `;
+
+        return;
+    }
+
+    videos.forEach(
+        video => {
+
+            const short =
+                createShortItem(
+                    video
+                );
+
+            feed.appendChild(
+                short
+            );
+
+        }
+    );
+
+    setupShortObserver();
+
+}
+
+
+/* =========================================================
+   CREATE SHORT ITEM
+========================================================= */
+
+function createShortItem(
+    video
+) {
+
+    const item =
+        document.createElement(
+            "article"
+        );
+
+    item.className =
+        "short-item";
+
+    item.dataset.videoId =
+        video.id;
+
+    const creator =
+        video.creator || {};
+
+    const videoUrl =
+        video.video_url
+            ? api(
+                video.video_url
+            )
+            : "";
+
+    item.innerHTML = `
+
+        <video
+            class="short-video"
+            src="${escapeAttribute(
+                videoUrl
+            )}"
+            playsinline
+            muted
+            loop
+            preload="metadata"
+        ></video>
+        
+        <div
+            class="short-play-overlay"
+            data-play-overlay
+        >
+            ▶
+        </div>
+        
+        <div class="short-progress">
+            <div
+                class="short-progress-bar"
+                data-progress
+            ></div>
+        </div>
+
+
+        <div
+            class="short-gradient"
+        ></div>
+
+
+        <button
+            class="short-mute-button"
+            data-action="mute"
+        >
+            🔇
+        </button>
+
+
+        <div class="short-actions">
+
+            <button
+                class="short-action"
+                data-action="like"
+            >
+
+                <span
+                    class="short-action-icon"
+                >
+                    ❤️
+                </span>
+
+                <span
+                    class="short-action-count"
+                    data-like-count
+                >
+                    ${Number(
+                        video.likes || 0
+                    )}
+                </span>
+
+            </button>
+
+
+            <button
+                class="short-action"
+                data-action="comment"
+            >
+
+                <span
+                    class="short-action-icon"
+                >
+                    💬
+                </span>
+
+                <span
+                    class="short-action-count"
+                >
+                    ${Number(
+                        video.comments || 0
+                    )}
+                </span>
+
+            </button>
+
+
+            <button
+                class="short-action"
+                data-action="share"
+            >
+
+                <span
+                    class="short-action-icon"
+                >
+                    ↗
+                </span>
+
+                <span
+                    class="short-action-count"
+                >
+                    Share
+                </span>
+
+            </button>
+
+        </div>
+
+
+        <div class="short-bottom-info">
+
+            <div class="short-creator">
+
+                @${escapeHtml(
+                    creator.username ||
+                    "creator"
+                )}
+
+            </div>
+
+
+            <div class="short-title">
+
+                ${escapeHtml(
+                    video.title ||
+                    "Untitled"
+                )}
+
+            </div>
+
+
+            ${
+                video.description
+                ? `
+                    <div
+                        class="short-description"
+                    >
+                        ${escapeHtml(
+                            video.description
+                        )}
+                    </div>
+                `
+                : ""
+            }
+
+        </div>
+
+    `;
+
+
+    const videoElement =
+        item.querySelector(
+            ".short-video"
+        );
+
+    const progressBar =
+    item.querySelector(
+        "[data-progress]"
+    );
+    
+    videoElement.addEventListener(
+        "timeupdate",
+        () => {
+    
+            if (
+                !progressBar ||
+                !videoElement.duration
+            ) {
+                return;
+            }
+    
+            const percent =
+                (
+                    videoElement.currentTime /
+                    videoElement.duration
+                ) * 100;
+    
+            progressBar.style.width =
+                percent + "%";
+    
+        }
+    );
+
+
+    /* =====================================================
+    TAP VIDEO = PLAY / PAUSE
+    ===================================================== */
+
+    let lastShortTap = 0;
+
+    videoElement.addEventListener(
+        "click",
+        () => {
+
+            const currentTime =
+                Date.now();
+
+            const isDoubleTap =
+                currentTime -
+                lastShortTap <
+                300;
+
+            lastShortTap =
+                currentTime;
+
+
+            /*
+            * DOUBLE TAP = LIKE
+            */
+            if (
+                isDoubleTap
+            ) {
+
+                likeShort(
+                    video,
+                    item
+                );
+
+                showDoubleLike(
+                    item
+                );
+
+                return;
+
+            }
+
+
+            /*
+            * SINGLE TAP = PLAY / PAUSE
+            */
+            if (
+                videoElement.paused
+            ) {
+
+                playShort(
+                    item
+                );
+
+            } else {
+
+                videoElement.pause();
+
+                updatePlayOverlay(
+                    item,
+                    true
+                );
+
+            }
+
+        }
+    );
+
+
+    /*
+     * Mute button
+     */
+
+    item.querySelector(
+        "[data-action='mute']"
     )
+    .addEventListener(
+        "click",
+        event => {
 
-    print()
+            event.stopPropagation();
 
-    print("=" * 60)
+            videoElement.muted =
+                !videoElement.muted;
 
-    print()
+            updateMuteButton(
+                item,
+                videoElement
+            );
 
-    app.run(
+        }
+    );
 
-        host=config.HOST,
 
-        port=config.PORT,
+    /*
+     * Like
+     */
 
-        debug=config.DEBUG
+    item.querySelector(
+        "[data-action='like']"
     )
+    .addEventListener(
+        "click",
+        event => {
 
-# @app.route("/api/debug/videos")
-# def debug_videos():
+            event.stopPropagation();
 
-#     connection = get_connection()
+            likeShort(
+                video,
+                item
+            );
 
-#     rows = connection.execute(
-#         """
-#         SELECT 
-#             id,
-#             title,
-#             is_short
-#         FROM videos
-#         ORDER BY id DESC
-#         LIMIT 20
-#         """
-#     ).fetchall()
+        }
+    );
 
-#     connection.close()
 
-#     return jsonify([
-#         {
-#             "id": row["id"],
-#             "title": row["title"],
-#             "is_short": row["is_short"]
-#         }
-#         for row in rows
-#     ])
+    /*
+     * Comments
+     */
+
+    item.querySelector(
+        "[data-action='comment']"
+    )
+    .addEventListener(
+        "click",
+        event => {
+
+            event.stopPropagation();
+
+            openShortComments(
+                video
+            );
+
+        }
+    );
+
+
+    /*
+     * Share
+     */
+
+    item.querySelector(
+        "[data-action='share']"
+    )
+    .addEventListener(
+        "click",
+        event => {
+
+            event.stopPropagation();
+
+            shareShort(
+                video
+            );
+
+        }
+    );
+
+
+    return item;
+
+}
+
+
+/* =========================================================
+   MUTE BUTTON
+========================================================= */
+
+function updateMuteButton(
+    item,
+    video
+) {
+
+    const button =
+        item.querySelector(
+            "[data-action='mute']"
+        );
+
+    if (!button) {
+        return;
+    }
+
+    button.textContent =
+        video.muted
+            ? "🔇"
+            : "🔊";
+
+}
+
+
+/* =========================================================
+   SHORTS OBSERVER
+========================================================= */
+
+function setupShortObserver() {
+
+    if (
+        shortsObserver
+    ) {
+
+        shortsObserver.disconnect();
+
+    }
+
+    const feed =
+        $("#shortsFeed");
+
+    if (!feed) {
+        return;
+    }
+
+
+    shortsObserver =
+        new IntersectionObserver(
+            entries => {
+
+                let bestEntry = null;
+
+                entries.forEach(
+                    entry => {
+
+                        const item =
+                            entry.target;
+
+                        const video =
+                            item.querySelector(
+                                ".short-video"
+                            );
+
+                        if (!video) {
+                            return;
+                        }
+
+                        if (
+                            entry.isIntersecting
+                        ) {
+
+                            if (
+                                !bestEntry ||
+                                entry.intersectionRatio >
+                                bestEntry.intersectionRatio
+                            ) {
+
+                                bestEntry =
+                                    entry;
+
+                            }
+
+                        }
+
+                    }
+                );
+
+
+                if (!bestEntry) {
+
+                    document
+                        .querySelectorAll(
+                            "#shortsFeed .short-video"
+                        )
+                        .forEach(
+                            video => {
+
+                                video.pause();
+
+                            }
+                        );
+
+                    return;
+
+                }
+
+
+                const activeItem =
+                    bestEntry.target;
+
+
+                document
+                    .querySelectorAll(
+                        "#shortsFeed .short-item"
+                    )
+                    .forEach(
+                        item => {
+
+                            if (
+                                item !==
+                                activeItem
+                            ) {
+
+                                pauseShort(
+                                    item
+                                );
+
+                            }
+
+                        }
+                    );
+
+
+                if (
+                    bestEntry.intersectionRatio
+                    >=
+                    0.60
+                ) {
+
+                    playShort(
+                        activeItem
+                    );
+
+                }
+
+            },
+            {
+                root:
+                    feed,
+
+                threshold: [
+                    0.25,
+                    0.50,
+                    0.60,
+                    0.75,
+                    0.90
+                ]
+            }
+        );
+
+}
+
+
+/* =========================================================
+   PLAY SHORT
+========================================================= */
+
+async function playShort(
+    item
+) {
+
+    const video =
+        item.querySelector(
+            ".short-video"
+        );
+
+    if (!video) {
+        return;
+    }
+
+
+    /*
+     * Pause all other Shorts.
+     */
+
+    document
+        .querySelectorAll(
+            ".short-video"
+        )
+        .forEach(
+            other => {
+
+                if (
+                    other !== video
+                ) {
+
+                    other.pause();
+
+                }
+
+            }
+        );
+
+
+    /*
+     * Mobile autoplay normally works
+     * when the video starts muted.
+     */
+
+    video.muted = true;
+
+    updateMuteButton(
+        item,
+        video
+    );
+
+
+    try {
+
+        await video.play();
+
+        updatePlayOverlay(
+            item,
+            false
+        );
+
+    } catch (
+        error
+    ) {
+
+        console.log(
+            "Autoplay blocked:",
+            error
+        );
+
+    }
+
+
+    /*
+     * Count view once per loaded Shorts session.
+     */
+
+    const videoId =
+        Number(
+            item.dataset.videoId
+        );
+
+    if (
+        videoId &&
+        !viewedShorts.has(
+            videoId
+        )
+    ) {
+
+        viewedShorts.add(
+            videoId
+        );
+
+        countShortView(
+            videoId
+        );
+
+    }
+
+}
+
+
+/* =========================================================
+   PAUSE SHORT
+========================================================= */
+
+function pauseShort(
+    item
+) {
+
+    const video =
+        item.querySelector(
+            ".short-video"
+        );
+
+    if (video) {
+
+        video.pause();
+
+        updatePlayOverlay(
+            item,
+            true
+        );
+
+    }
+
+}
+
+
+/* =========================================================
+   COUNT SHORT VIEW
+========================================================= */
+
+async function countShortView(
+    videoId
+) {
+
+    try {
+
+        await apiRequest(
+            "/api/videos/" +
+            videoId
+        );
+
+    } catch (error) {
+
+        console.log(
+            "View counting error:",
+            error
+        );
+
+    }
+
+}
+
+
+/* =========================================================
+   LIKE SHORT
+========================================================= */
+
+async function likeShort(
+    video,
+    item
+) {
+
+    if (!state.token) {
+
+        showToast(
+            "Login to like videos."
+        );
+
+        showScreen(
+            "login"
+        );
+
+        return;
+    }
+
+
+    try {
+
+        const {
+            response,
+            data
+        } =
+            await apiRequest(
+                "/api/videos/" +
+                video.id +
+                "/like",
+                {
+                    method:
+                        "POST"
+                }
+            );
+
+
+        if (!response.ok) {
+
+            showToast(
+                data.error ||
+                "Could not like video."
+            );
+
+            return;
+        }
+
+
+        const count =
+            item.querySelector(
+                "[data-like-count]"
+            );
+
+        if (count) {
+
+            count.textContent =
+                Number(
+                    data.likes || 0
+                );
+
+        }
+
+
+        showToast(
+            data.liked
+                ? "Liked ❤️"
+                : "Like removed"
+        );
+
+
+    } catch (error) {
+
+        console.log(
+            error
+        );
+
+        showToast(
+            "Connection error."
+        );
+
+    }
+
+}
+
+
+/* =========================================================
+   SHORT COMMENTS
+========================================================= */
+
+async function openShortComments(
+    video
+) {
+
+    currentShortVideo =
+        video;
+
+    const panel =
+        $("#shortCommentsPanel");
+
+    if (!panel) {
+        return;
+    }
+
+    panel.classList.remove(
+        "hidden"
+    );
+
+    await loadShortComments();
+
+}
+
+
+/* =========================================================
+   LOAD SHORT COMMENTS
+========================================================= */
+
+async function loadShortComments() {
+
+    if (
+        !currentShortVideo
+    ) {
+
+        return;
+    }
+
+    const list =
+        $("#shortCommentsList");
+
+    if (!list) {
+        return;
+    }
+
+    list.innerHTML =
+        "Loading comments...";
+
+
+    try {
+
+        const {
+            response,
+            data
+        } =
+            await apiRequest(
+                "/api/videos/" +
+                currentShortVideo.id +
+                "/comments"
+            );
+
+
+        if (!response.ok) {
+
+            throw new Error(
+                data.error ||
+                "Could not load comments."
+            );
+
+        }
+
+
+        list.innerHTML = "";
+
+
+        if (!data.length) {
+
+            list.innerHTML = `
+                <div
+                    style="
+                        padding:18px;
+                        text-align:center;
+                        color:#858c99;
+                    "
+                >
+                    No comments yet.
+                </div>
+            `;
+
+            return;
+        }
+
+
+        data.forEach(
+            comment => {
+
+                const item =
+                    document.createElement(
+                        "div"
+                    );
+
+                item.className =
+                    "short-comment-item";
+
+                item.innerHTML = `
+
+                    <div
+                        class="short-comment-user"
+                    >
+                        @${escapeHtml(
+                            comment.username ||
+                            "user"
+                        )}
+                    </div>
+
+                    <div
+                        class="short-comment-text"
+                    >
+                        ${escapeHtml(
+                            comment.text
+                        )}
+                    </div>
+
+                `;
+
+                list.appendChild(
+                    item
+                );
+
+            }
+        );
+
+
+    } catch (error) {
+
+        list.innerHTML = `
+            <div
+                style="
+                    padding:18px;
+                    color:#858c99;
+                "
+            >
+                ${escapeHtml(
+                    error.message
+                )}
+            </div>
+        `;
+
+    }
+
+}
+
+
+/* =========================================================
+   SEND SHORT COMMENT
+========================================================= */
+
+async function sendShortComment() {
+
+    if (
+        !currentShortVideo
+    ) {
+
+        return;
+    }
+
+    if (!state.token) {
+
+        showToast(
+            "Login to comment."
+        );
+
+        showScreen(
+            "login"
+        );
+
+        return;
+    }
+
+
+    const input =
+        $("#shortCommentInput");
+
+    if (!input) {
+        return;
+    }
+
+    const text =
+        input.value.trim();
+
+    if (!text) {
+        return;
+    }
+
+
+    try {
+
+        const {
+            response,
+            data
+        } =
+            await apiRequest(
+                "/api/videos/" +
+                currentShortVideo.id +
+                "/comments",
+                {
+                    method:
+                        "POST",
+
+                    headers: {
+                        "Content-Type":
+                            "application/json"
+                    },
+
+                    body:
+                        JSON.stringify({
+                            text
+                        })
+                }
+            );
+
+
+        if (
+            response.status === 201
+        ) {
+
+            input.value = "";
+
+            showToast(
+                "Comment added."
+            );
+
+            loadShortComments();
+
+        } else {
+
+            showToast(
+                data.error ||
+                "Could not add comment."
+            );
+
+        }
+
+    } catch (error) {
+
+        showToast(
+            "Connection error."
+        );
+
+    }
+
+}
+
+
+/* =========================================================
+   SHARE SHORT
+========================================================= */
+
+async function shareShort(
+    video
+) {
+
+    const link =
+        window.location.origin +
+        video.video_url;
+
+
+    if (
+        navigator.share
+    ) {
+
+        try {
+
+            await navigator.share({
+
+                title:
+                    video.title ||
+                    "Creator Video",
+
+                text:
+                    video.description ||
+                    "Check out this video!",
+
+                url:
+                    link
+
+            });
+
+        } catch (error) {
+
+            /*
+             * User cancelled share.
+             */
+
+        }
+
+        return;
+    }
+
+
+    try {
+
+        await navigator.clipboard.writeText(
+            link
+        );
+
+        showToast(
+            "Video link copied."
+        );
+
+    } catch (error) {
+
+        showToast(
+            "Sharing is not supported here."
+        );
+
+    }
+
+}
+
+
+/* =========================================================
+   STOP SHORTS
+========================================================= */
+
+function stopShorts() {
+
+    document
+        .querySelectorAll(
+            ".short-video"
+        )
+        .forEach(
+            video => {
+
+                video.pause();
+
+            }
+        );
+
+}
+
+/* =========================================================
+   PUBLIC CREATOR PROFILE
+========================================================= */
+
+let currentCreatorUsername = "";
+
+
+/* =========================================================
+   OPEN CREATOR PROFILE
+========================================================= */
+
+async function openCreatorProfile(
+    username
+) {
+
+    if (!username) {
+        return;
+    }
+
+    currentCreatorUsername =
+        username;
+
+    $("#creatorProfileUsername")
+        .textContent =
+        "@" + username;
+
+    $("#creatorProfileDisplayName")
+        .textContent =
+        "Loading...";
+
+    $("#creatorProfileBio")
+        .textContent =
+        "";
+
+    $("#creatorProfileVideos")
+        .textContent =
+        "—";
+
+    $("#creatorProfileFollowers")
+        .textContent =
+        "—";
+
+    $("#creatorProfileFollowing")
+        .textContent =
+        "—";
+
+    $("#creatorProfileVideos")
+        .innerHTML = `
+            <div class="loading-box">
+                <div class="loading-spinner"></div>
+                <div>Loading creator...</div>
+            </div>
+        `;
+
+    showScreen(
+        "creatorProfile"
+    );
+
+
+    try {
+
+        const {
+            response,
+            data
+        } = await apiRequest(
+            "/api/users/" +
+            encodeURIComponent(
+                username
+            )
+        );
+
+        if (!response.ok) {
+
+            throw new Error(
+                data.error ||
+                "Creator not found."
+            );
+
+        }
+
+
+        const user =
+            data.user || {};
+
+
+        $("#creatorProfileUsername")
+            .innerHTML = `
+                @${escapeHtml(
+                    user.username ||
+                    username
+                )}
+        
+                ${
+                    user.verified
+                    ? `<span
+                            style="
+                                color:#4da3ff;
+                                margin-left:4px;
+                            "
+                       >✓</span>`
+                    : ""
+                }
+            `;
+
+
+        $("#creatorProfileDisplayName")
+            .textContent =
+            user.display_name ||
+            "Creator";
+
+
+        $("#creatorProfileBio")
+            .textContent =
+            user.bio ||
+            "No bio yet.";
+
+
+        $("#creatorProfileVideos")
+            .textContent =
+            Number(
+                (data.videos || []).length
+            );
+
+
+        $("#creatorProfileFollowers")
+            .textContent =
+            Number(
+                user.followers || 0
+            );
+
+
+        $("#creatorProfileFollowing")
+            .textContent =
+            Number(
+                user.following || 0
+            );
+
+
+        /*
+         * Don't show Follow on your own profile.
+         */
+
+        if (
+            state.user &&
+            state.user.username &&
+            state.user.username.toLowerCase() ===
+            username.toLowerCase()
+        ) {
+
+            $("#creatorFollowButton")
+                .textContent =
+                "Your Profile";
+
+            $("#creatorFollowButton")
+                .disabled = true;
+
+        } else {
+
+            $("#creatorFollowButton")
+                .disabled = false;
+
+            /*
+             * We will get the real follow state
+             * from the status endpoint below.
+             */
+
+            await loadFollowState(
+                username
+            );
+
+        }
+
+
+        renderVideos(
+            $("#creatorProfileVideos"),
+            data.videos || []
+        );
+
+
+    } catch (
+        error
+    ) {
+
+        $("#creatorProfileVideos")
+            .innerHTML = `
+                <div class="empty-box">
+                    ${escapeHtml(
+                        error.message
+                    )}
+                </div>
+            `;
+
+    }
+
+}
+
+
+/* =========================================================
+   FOLLOW STATE
+========================================================= */
+
+async function loadFollowState(
+    username
+) {
+
+    if (
+        !state.token
+    ) {
+
+        $("#creatorFollowButton")
+            .textContent =
+            "Follow";
+
+        return;
+    }
+
+
+    try {
+
+        const {
+            response,
+            data
+        } =
+            await apiRequest(
+                "/api/users/" +
+                encodeURIComponent(
+                    username
+                ) +
+                "/follow/status"
+            );
+
+
+        if (
+            response.ok
+        ) {
+
+            updateFollowButton(
+                data.following
+            );
+
+        } else {
+
+            $("#creatorFollowButton")
+                .textContent =
+                "Follow";
+
+        }
+
+    } catch (
+        error
+    ) {
+
+        $("#creatorFollowButton")
+            .textContent =
+            "Follow";
+
+    }
+
+}
+
+
+/* =========================================================
+   FOLLOW BUTTON UI
+========================================================= */
+
+function updateFollowButton(
+    following
+) {
+
+    const button =
+        $("#creatorFollowButton");
+
+    if (!button) {
+        return;
+    }
+
+    button.dataset.following =
+        following
+            ? "true"
+            : "false";
+
+    button.textContent =
+        following
+            ? "Following ✓"
+            : "Follow";
+
+}
+
+
+/* =========================================================
+   FOLLOW / UNFOLLOW
+========================================================= */
+
+async function toggleCreatorFollow() {
+
+    if (
+        !currentCreatorUsername
+    ) {
+
+        return;
+    }
+
+
+    if (
+        !state.token
+    ) {
+
+        showToast(
+            "Login to follow creators."
+        );
+
+        showScreen(
+            "login"
+        );
+
+        return;
+    }
+
+
+    const button =
+        $("#creatorFollowButton");
+
+
+    const oldText =
+        button.textContent;
+
+
+    button.disabled =
+        true;
+
+    button.textContent =
+        "Please wait...";
+
+
+    try {
+
+        const {
+            response,
+            data
+        } =
+            await apiRequest(
+                "/api/users/" +
+                encodeURIComponent(
+                    currentCreatorUsername
+                ) +
+                "/follow",
+                {
+                    method:
+                        "POST"
+                }
+            );
+
+
+        if (!response.ok) {
+
+            button.disabled =
+                false;
+
+            button.textContent =
+                oldText;
+
+            showToast(
+                data.error ||
+                "Could not update follow."
+            );
+
+            return;
+        }
+
+
+        updateFollowButton(
+            data.following
+        );
+
+
+        $("#creatorProfileFollowers")
+            .textContent =
+            Number(
+                data.followers || 0
+            );
+
+
+        showToast(
+            data.following
+                ? "Following ❤️"
+                : "Unfollowed"
+        );
+
+
+    } catch (
+        error
+    ) {
+
+        button.textContent =
+            oldText;
+
+        showToast(
+            "Connection error."
+        );
+
+    }
+
+
+    button.disabled =
+        false;
+
+}
+
+/* =========================================================
+   NOTIFICATIONS
+========================================================= */
+
+async function loadNotifications() {
+
+    const container =
+        $("#notificationsList");
+
+    if (!container) {
+        return;
+    }
+
+
+    if (!state.token) {
+
+        container.innerHTML = `
+            <div class="empty-box">
+
+                🔔
+
+                <div>
+                    Login to see notifications.
+                </div>
+
+                <button
+                    class="primary-button"
+                    onclick="showScreen('login')"
+                >
+                    Login
+                </button>
+
+            </div>
+        `;
+
+        return;
+    }
+
+
+    container.innerHTML = `
+        <div class="loading-box">
+
+            <div class="loading-spinner"></div>
+
+            <div>
+                Loading notifications...
+            </div>
+
+        </div>
+    `;
+
+
+    try {
+
+        const {
+            response,
+            data
+        } =
+            await apiRequest(
+                "/api/notifications"
+            );
+
+
+        if (!response.ok) {
+
+            throw new Error(
+                data.error ||
+                "Could not load notifications."
+            );
+
+        }
+
+
+        renderNotifications(
+            data.notifications || []
+        );
+
+
+    } catch (
+        error
+    ) {
+
+        container.innerHTML = `
+            <div class="empty-box">
+
+                ${escapeHtml(
+                    error.message
+                )}
+
+            </div>
+        `;
+
+    }
+
+}
+
+
+/* =========================================================
+   RENDER NOTIFICATIONS
+========================================================= */
+
+function renderNotifications(
+    notifications
+) {
+
+    const container =
+        $("#notificationsList");
+
+    container.innerHTML = "";
+
+
+    if (!notifications.length) {
+
+        container.innerHTML = `
+            <div class="empty-box">
+
+                🔔
+
+                <div>
+                    No notifications yet.
+                </div>
+
+            </div>
+        `;
+
+        return;
+    }
+
+
+    notifications.forEach(
+        notification => {
+
+            const item =
+                document.createElement(
+                    "div"
+                );
+
+            item.className =
+                "notification-item";
+
+
+            let icon =
+                "🔔";
+
+            if (
+                notification.type ===
+                "follow"
+            ) {
+
+                icon = "👥";
+
+            }
+
+
+            const sender =
+                notification.sender ||
+                {};
+
+
+            item.innerHTML = `
+
+                <div
+                    class="notification-icon"
+                >
+                    ${icon}
+                </div>
+
+                <div
+                    class="notification-content"
+                >
+
+                    <div
+                        class="notification-text"
+                    >
+
+                        <strong>
+                            @${escapeHtml(
+                                sender.username ||
+                                "someone"
+                            )}
+                        </strong>
+
+                        ${escapeHtml(
+                            notification.message ||
+                            ""
+                        )}
+
+                    </div>
+
+                    <div
+                        class="notification-time"
+                    >
+                        ${formatNotificationTime(
+                            notification.created_at
+                        )}
+                    </div>
+
+                </div>
+
+            `;
+
+
+            container.appendChild(
+                item
+            );
+
+        }
+    );
+
+}
+
+
+/* =========================================================
+   FOLLOWING FEED
+========================================================= */
+
+async function loadFollowingFeed() {
+
+    const container =
+        $("#videoFeed");
+
+    if (!container) {
+        return;
+    }
+
+
+    if (!state.token) {
+
+        container.innerHTML = `
+            <div class="empty-box">
+
+                👥
+
+                <div>
+                    Login to see your Following feed.
+                </div>
+
+                <button
+                    class="primary-button"
+                    onclick="showScreen('login')"
+                >
+                    Login
+                </button>
+
+            </div>
+        `;
+
+        return;
+    }
+
+
+    container.innerHTML = `
+        <div class="loading-box">
+
+            <div class="loading-spinner"></div>
+
+            <div>
+                Loading Following...
+            </div>
+
+        </div>
+    `;
+
+
+    try {
+
+        const {
+            response,
+            data
+        } =
+            await apiRequest(
+                "/api/feed/following"
+            );
+
+
+        if (!response.ok) {
+
+            throw new Error(
+                data.error ||
+                "Could not load Following feed."
+            );
+
+        }
+
+
+        renderVideos(
+            container,
+            data.videos || []
+        );
+
+
+    } catch (
+        error
+    ) {
+
+        container.innerHTML = `
+            <div class="empty-box">
+
+                ❌
+
+                <div>
+                    ${escapeHtml(
+                        error.message
+                    )}
+                </div>
+
+                <button
+                    class="primary-button"
+                    onclick="loadFollowingFeed()"
+                >
+                    Retry
+                </button>
+
+            </div>
+        `;
+
+    }
+
+}
+
+/* =========================================================
+   NOTIFICATION TIME
+========================================================= */
+
+function formatNotificationTime(
+    timestamp
+) {
+
+    if (!timestamp) {
+        return "";
+    }
+
+    const date =
+        new Date(
+            Number(timestamp) *
+            1000
+        );
+
+    return date.toLocaleString();
+
+}
+
+/* =========================================================
+   RANDOM THUMBNAIL
+========================================================= */
+
+const RANDOM_THUMBNAIL_ICONS = [
+    "🎬",
+    "🚀",
+    "🔥",
+    "✨",
+    "🎮",
+    "🎵",
+    "📸",
+    "🌟",
+    "💡",
+    "🎨",
+    "🏆",
+    "❤️"
+];
+
+
+function getRandomThumbnailIcon(
+    videoId
+) {
+
+    /*
+     * Use the video ID so the same video
+     * gets the same random-looking thumbnail
+     * every time the feed reloads.
+     */
+
+    const index =
+        Number(videoId) %
+        RANDOM_THUMBNAIL_ICONS.length;
+
+    return RANDOM_THUMBNAIL_ICONS[
+        index
+    ];
+
+}
+
+/* =========================================================
+   TRENDING FEED
+========================================================= */
+
+async function loadTrendingFeed() {
+
+    const container =
+        $("#videoFeed");
+
+    if (!container) {
+        return;
+    }
+
+
+    container.innerHTML = `
+        <div class="loading-box">
+
+            <div class="loading-spinner"></div>
+
+            <div>
+                Loading Trending...
+            </div>
+
+        </div>
+    `;
+
+
+    try {
+
+        const {
+            response,
+            data
+        } =
+            await apiRequest(
+                "/api/feed/trending"
+            );
+
+
+        if (!response.ok) {
+
+            throw new Error(
+                data.error ||
+                "Could not load Trending feed."
+            );
+
+        }
+
+
+        renderVideos(
+            container,
+            data.videos || []
+        );
+
+
+    } catch (
+        error
+    ) {
+
+        container.innerHTML = `
+            <div class="empty-box">
+
+                ❌
+
+                <div>
+                    Could not load Trending.
+                </div>
+
+                <div>
+                    ${escapeHtml(
+                        error.message
+                    )}
+                </div>
+
+                <button
+                    class="primary-button"
+                    onclick="loadTrendingFeed()"
+                >
+                    Retry
+                </button>
+
+            </div>
+        `;
+
+    }
+
+}
+
+/* =========================================================
+   FOR YOU FEED
+========================================================= */
+
+async function loadForYouFeed() {
+
+    const container =
+        $("#videoFeed");
+
+    if (!container) {
+        return;
+    }
+
+
+    container.innerHTML = `
+        <div class="loading-box">
+
+            <div class="loading-spinner"></div>
+
+            <div>
+                Loading your feed...
+            </div>
+
+        </div>
+    `;
+
+
+    try {
+
+        const {
+            response,
+            data
+        } =
+            await apiRequest(
+                "/api/feed/for-you"
+            );
+
+
+        if (!response.ok) {
+
+            throw new Error(
+                data.error ||
+                "Could not load your feed."
+            );
+
+        }
+
+
+        renderVideos(
+            container,
+            data.videos || []
+        );
+
+
+    } catch (
+        error
+    ) {
+
+        container.innerHTML = `
+            <div class="empty-box">
+
+                ❌
+
+                <div>
+                    Could not load your feed.
+                </div>
+
+                <div>
+                    ${escapeHtml(
+                        error.message
+                    )}
+                </div>
+
+                <button
+                    class="primary-button"
+                    onclick="loadForYouFeed()"
+                >
+                    Retry
+                </button>
+
+            </div>
+        `;
+
+    }
+
+}
+
+/* =========================================================
+   SHORT PLAY OVERLAY
+========================================================= */
+
+function updatePlayOverlay(
+    item,
+    show
+) {
+
+    const overlay =
+        item.querySelector(
+            "[data-play-overlay]"
+        );
+
+    if (!overlay) {
+        return;
+    }
+
+    if (show) {
+
+        overlay.classList.add(
+            "visible"
+        );
+
+    } else {
+
+        overlay.classList.remove(
+            "visible"
+        );
+
+    }
+
+}
+
+function showDoubleLike(
+    item
+) {
+
+    const heart =
+        document.createElement(
+            "div"
+        );
+
+    heart.className =
+        "double-like-heart";
+
+    heart.textContent =
+        "❤️";
+
+    item.appendChild(
+        heart
+    );
+
+    setTimeout(
+        () => {
+
+            heart.remove();
+
+        },
+        800
+    );
+
+}
+
+/* =========================================================
+   CREATOR BOOST
+========================================================= */
+
+async function loadCreatorBoost() {
+
+    const scoreElement =
+        $("#boostScore");
+
+    const levelElement =
+        $("#boostLevel");
+
+    const progressBar =
+        $("#boostProgressBar");
+
+    const nextText =
+        $("#boostNextText");
+
+    const bestVideo =
+        $("#boostBestVideo");
+
+
+    if (!scoreElement) {
+        return;
+    }
+
+
+    try {
+
+        const {
+            response,
+            data
+        } =
+            await apiRequest(
+                "/api/creator/boost"
+            );
+
+
+        if (!response.ok) {
+
+            throw new Error(
+                data.error ||
+                "Could not load Creator Boost."
+            );
+
+        }
+
+
+        const boost =
+            data.boost || {};
+
+
+        const score =
+            Number(
+                boost.score || 0
+            );
+
+
+        scoreElement.textContent =
+            score;
+
+
+        levelElement.textContent =
+            boost.level_name ||
+            "🌱 New Creator";
+
+
+        const nextScore =
+            boost.next_score;
+
+
+        if (
+            nextScore
+        ) {
+
+            const previousScore =
+                boost.level === 0
+                    ? 0
+                    : boost.level === 1
+                    ? 50
+                    : 150;
+
+
+            const range =
+                nextScore -
+                previousScore;
+
+
+            const current =
+                Math.max(
+                    0,
+                    score -
+                    previousScore
+                );
+
+
+            const percent =
+                Math.min(
+                    100,
+                    (
+                        current /
+                        range
+                    ) * 100
+                );
+
+
+            progressBar.style.width =
+                percent + "%";
+
+
+            nextText.textContent =
+                nextScore -
+                score +
+                " points to next level";
+
+        } else {
+
+            progressBar.style.width =
+                "100%";
+
+            nextText.textContent =
+                "Maximum boost level reached 🚀";
+
+        }
+
+
+        const best =
+            boost.best_video;
+
+
+        if (best) {
+
+            bestVideo.innerHTML = `
+
+                <strong>
+                    🔥 Best performing video
+                </strong>
+
+                <div
+                    class="boost-video-title"
+                >
+                    ${escapeHtml(
+                        best.title ||
+                        "Untitled"
+                    )}
+                </div>
+
+                <div
+                    class="boost-video-stats"
+                >
+                    ${Number(
+                        best.views || 0
+                    )} views
+                    ·
+                    ${Number(
+                        best.likes || 0
+                    )} likes
+                    ·
+                    ${Number(
+                        best.comments || 0
+                    )} comments
+                </div>
+
+            `;
+
+        }
+
+    } catch (
+        error
+    ) {
+
+        console.log(
+            "Creator Boost error:",
+            error
+        );
+
+    }
+
+}
+
+async function deleteVideo(videoId){
+
+    if(!confirm("Delete this video permanently?")){
+        return;
+    }
+
+
+    const token = localStorage.getItem("creator_token");
+
+    console.log("DELETE TOKEN:", token);
+
+
+    const response = await fetch(
+        `/api/videos/${videoId}`,
+        {
+            method:"DELETE",
+
+            headers:{
+                "Authorization":
+                "Bearer " + token
+            }
+        }
+    );
+
+
+    const data = await response.json();
+
+
+    if(data.success){
+
+        alert(
+            "Video deleted"
+        );
+
+        location.reload();
+
+    }
+    else{
+
+        alert(
+            data.error
+        );
+
+    }
+
+}
+
+const shortsCheckbox = document.getElementById("shortsCheckbox");
+const videoCheckbox = document.getElementById("videoCheckbox");
+
+
+if(shortsCheckbox && videoCheckbox){
+
+    shortsCheckbox.addEventListener("change",()=>{
+
+        if(shortsCheckbox.checked){
+            videoCheckbox.checked = false;
+        }
+
+    });
+
+
+    videoCheckbox.addEventListener("change",()=>{
+
+        if(videoCheckbox.checked){
+            shortsCheckbox.checked = false;
+        }
+
+    });
+
+}
