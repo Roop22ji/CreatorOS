@@ -376,173 +376,206 @@ def register():
     ) or {}
 
     username = str(
-        data.get(
-            "username",
-            ""
-        )
+        data.get("username", "")
     ).strip()
 
     email = str(
-        data.get(
-            "email",
-            ""
-        )
+        data.get("email", "")
     ).strip().lower()
 
     password = str(
-        data.get(
-            "password",
-            ""
-        )
+        data.get("password", "")
     )
 
     display_name = str(
-        data.get(
-            "display_name",
-            ""
-        )
+        data.get("display_name", "")
     ).strip()
 
-    # --------------------------------------------------------
-    # VALIDATION
-    # --------------------------------------------------------
 
-    if not valid_username(
-        username
-    ):
+    # ========================================================
+    # VALIDATION
+    # ========================================================
+
+    if not valid_username(username):
 
         return jsonify({
-
             "success": False,
-
             "error":
                 "Username must contain 3-30 letters, numbers or _"
-
         }), 400
 
-    if not valid_email(
-        email
-    ):
+
+    if not valid_email(email):
 
         return jsonify({
-
             "success": False,
-
             "error":
                 "Invalid email"
-
         }), 400
+
 
     if len(password) < 6:
 
         return jsonify({
-
             "success": False,
-
             "error":
                 "Password must contain at least 6 characters"
-
         }), 400
 
-    # --------------------------------------------------------
+
+    if not display_name:
+
+        display_name = username
+
+
+    # ========================================================
     # DATABASE
-    # --------------------------------------------------------
+    # ========================================================
 
     connection = get_connection()
 
-    existing = connection.execute(
-        """
-        SELECT id
-        FROM users
-        WHERE username = ?
-           OR email = ?
-        """,
-        (
-            username,
-            email
+    try:
+
+        existing = connection.execute(
+            """
+            SELECT id
+            FROM users
+            WHERE username = ?
+               OR email = ?
+            """,
+            (
+                username,
+                email
+            )
+        ).fetchone()
+
+
+        if existing:
+
+            return jsonify({
+                "success": False,
+                "error":
+                    "Username or email already exists"
+            }), 409
+
+
+        # ====================================================
+        # CREATE USER
+        # ====================================================
+
+        password_hash = hash_password(
+            password
         )
-    ).fetchone()
 
-    if existing:
 
-        connection.close()
+        cursor = connection.execute(
+            """
+            INSERT INTO users
+            (
+                username,
+                email,
+                password_hash,
+                display_name,
+                bio,
+                avatar,
+                verified,
+                created_at
+            )
+
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                username,
+                email,
+                password_hash,
+                display_name,
+                "",
+                "",
+                0,
+                now()
+            )
+        )
+
+
+        connection.commit()
+
+
+        user_id = cursor.lastrowid
+
+
+        # ====================================================
+        # GET CREATED USER
+        # ====================================================
+
+        user = connection.execute(
+            """
+            SELECT *
+            FROM users
+            WHERE id = ?
+            """,
+            (
+                user_id,
+            )
+        ).fetchone()
+
+
+        if not user:
+
+            connection.rollback()
+
+            return jsonify({
+                "success": False,
+                "error":
+                    "Could not create account"
+            }), 500
+
+
+        token = create_token(
+            user_id
+        )
+
+
+        return jsonify({
+
+            "success": True,
+
+            "message":
+                "Account created successfully",
+
+            "token":
+                token,
+
+            "user":
+                user_to_dict(user)
+
+        }), 201
+
+
+    except Exception as error:
+
+        connection.rollback()
+
+        print(
+            "REGISTER ERROR:",
+            repr(error)
+        )
 
         return jsonify({
 
             "success": False,
 
             "error":
-                "Username or email already exists"
+                "Could not create account",
 
-        }), 409
+            "details":
+                str(error)
 
-    password_hash = hash_password(
-        password
-    )
+        }), 500
 
-    cursor = connection.execute(
-        """
-        INSERT INTO videos
-        (
-        user_id,
-        title,
-        description,
-        filename,
-        thumbnail,
-        is_short,
-        video_type,
-        visibility,
-        created_at
-        )
 
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """,
-        (
-        user["id"],
-        title,
-        description,
-        filename,
-        "/media/" + thumbnail_filename if thumbnail_filename else "",
-        is_short,
-        "short" if is_short else "video",
-        "public",
-        now()
-        )
-        )
+    finally:
 
-    connection.commit()
-
-    user_id = cursor.lastrowid
-
-    user = connection.execute(
-        """
-        SELECT *
-        FROM users
-        WHERE id = ?
-        """,
-        (user_id,)
-    ).fetchone()
-
-    connection.close()
-
-    token = create_token(
-        user_id
-    )
-
-    return jsonify({
-
-        "success": True,
-
-        "message":
-            "Account created successfully",
-
-        "token":
-            token,
-
-        "user":
-            user_to_dict(user)
-
-    }), 201
+        connection.close()
 
 
 # ============================================================
@@ -1694,6 +1727,38 @@ def delete_video(
 )
 @login_required
 def upload_video(user):
+
+    content_type = str(
+        request.form.get(
+            "content_type",
+            "video"
+        )
+    ).lower().strip()
+
+    is_short_value = str(
+        request.form.get(
+            "is_short",
+            ""
+        )
+    ).lower().strip()
+
+
+    if is_short_value in (
+        "true",
+        "1",
+        "yes",
+        "on"
+    ):
+        is_short = 1
+
+    elif content_type in (
+        "short",
+        "shorts"
+    ):
+        is_short = 1
+
+    else:
+        is_short = 0
 
     content_type = request.form.get(
         "content_type",
