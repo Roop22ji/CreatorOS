@@ -482,25 +482,33 @@ def register():
 
     cursor = connection.execute(
         """
-        INSERT INTO users
+        INSERT INTO videos
         (
-            username,
-            email,
-            password_hash,
-            display_name,
-            created_at
+        user_id,
+        title,
+        description,
+        filename,
+        thumbnail,
+        is_short,
+        video_type,
+        visibility,
+        created_at
         )
 
-        VALUES (?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
-            username,
-            email,
-            password_hash,
-            display_name,
-            now()
+        user["id"],
+        title,
+        description,
+        filename,
+        "/media/" + thumbnail_filename if thumbnail_filename else "",
+        is_short,
+        "short" if is_short else "video",
+        "public",
+        now()
         )
-    )
+        )
 
     connection.commit()
 
@@ -1260,6 +1268,11 @@ def following_feed(user):
             AND
 
             videos.visibility = 'public'
+            AND
+
+            videos.is_short = 0
+
+            
 
         ORDER BY
             videos.created_at DESC
@@ -1481,6 +1494,195 @@ def mark_notifications_read(user):
 
     })
 
+# ============================================================
+# DELETE OWN VIDEO
+# ============================================================
+
+@app.route(
+    "/api/videos/<int:video_id>",
+    methods=["DELETE"]
+)
+@login_required
+def delete_video(
+    user,
+    video_id
+):
+
+    connection = get_connection()
+
+    # ========================================================
+    # FIND VIDEO
+    # ========================================================
+
+    video = connection.execute(
+        """
+        SELECT
+            id,
+            user_id,
+            filename,
+            thumbnail
+        FROM videos
+        WHERE id = ?
+        """,
+        (
+            video_id,
+        )
+    ).fetchone()
+
+    if not video:
+
+        connection.close()
+
+        return jsonify({
+
+            "success": False,
+
+            "error":
+                "Video not found"
+
+        }), 404
+
+    # ========================================================
+    # SECURITY
+    # ========================================================
+    # User can delete ONLY their own video.
+
+    if video["user_id"] != user["id"]:
+
+        connection.close()
+
+        return jsonify({
+
+            "success": False,
+
+            "error":
+                "You can only delete your own videos"
+
+        }), 403
+
+    # ========================================================
+    # FILE PATH
+    # ========================================================
+
+    video_path = os.path.join(
+        config.UPLOAD_FOLDER,
+        video["filename"]
+    )
+
+    thumbnail_filename = video["thumbnail"]
+
+    thumbnail_path = None
+
+    if thumbnail_filename:
+
+        # Database stores something like:
+        # /media/abc.jpg
+
+        thumbnail_name = (
+            thumbnail_filename
+            .replace("/media/", "")
+            .replace("\\media\\", "")
+        )
+
+        thumbnail_path = os.path.join(
+            config.UPLOAD_FOLDER,
+            thumbnail_name
+        )
+
+    # ========================================================
+    # DELETE DATABASE RECORD
+    # ========================================================
+
+    try:
+
+        connection.execute(
+            """
+            DELETE FROM videos
+            WHERE id = ?
+            """,
+            (
+                video_id,
+            )
+        )
+
+        connection.commit()
+
+    except Exception as error:
+
+        connection.rollback()
+        connection.close()
+
+        return jsonify({
+
+            "success": False,
+
+            "error":
+                "Could not delete video",
+
+            "details":
+                str(error)
+
+        }), 500
+
+    connection.close()
+
+    # ========================================================
+    # DELETE VIDEO FILE
+    # ========================================================
+
+    try:
+
+        if os.path.exists(video_path):
+
+            os.remove(
+                video_path
+            )
+
+    except Exception as error:
+
+        print(
+            "Could not delete video file:",
+            error
+        )
+
+    # ========================================================
+    # DELETE THUMBNAIL
+    # ========================================================
+
+    try:
+
+        if thumbnail_path:
+
+            if os.path.exists(
+                thumbnail_path
+            ):
+
+                os.remove(
+                    thumbnail_path
+                )
+
+    except Exception as error:
+
+        print(
+            "Could not delete thumbnail:",
+            error
+        )
+
+    # ========================================================
+    # RESPONSE
+    # ========================================================
+
+    return jsonify({
+
+        "success": True,
+
+        "message":
+            "Video deleted successfully",
+
+        "video_id":
+            video_id
+
+    })
 
 # ============================================================
 # UPLOAD VIDEO
@@ -1493,9 +1695,21 @@ def mark_notifications_read(user):
 @login_required
 def upload_video(user):
 
+    content_type = request.form.get(
+        "content_type",
+        "video"
+    ).lower().strip()
+
+
+    if content_type == "short":
+        is_short = 1
+    else:
+        is_short = 0
+
     video_file = request.files.get(
         "video"
     )
+
     thumbnail_file = request.files.get(
         "thumbnail"
     )
@@ -1513,6 +1727,55 @@ def upload_video(user):
             ""
         )
     ).strip()
+
+    # is_short = int(
+    #     request.form.get(
+    #         "is_short",
+    #         0
+    #     )
+    # )
+
+    # is_short = request.form.get(
+    #     "is_short",
+    #     "0"
+    # ).lower() in (
+    #     "1",
+    #     "true",
+    #     "yes",
+    #     "on"
+    # )
+
+    # ========================================================
+    # SHORT STATUS
+    # ========================================================
+
+    # Frontend can send:
+    # is_short = "true"
+    # is_short = "1"
+    # is_short = "on"
+    #
+    # Anything else means normal video.
+
+    # ========================================================
+    # SHORT STATUS
+    # ========================================================
+
+    content_type = str(
+        request.form.get(
+            "content_type",
+            "video"
+        )
+    ).lower().strip()
+
+
+    if content_type in ("short", "shorts"):
+        is_short = 1
+    else:
+        is_short = 0
+
+    # ========================================================
+    # VALIDATION
+    # ========================================================
 
     if not video_file:
 
@@ -1549,6 +1812,10 @@ def upload_video(user):
 
         }), 400
 
+    # ========================================================
+    # SAVE VIDEO
+    # ========================================================
+
     original_name = secure_filename(
         video_file.filename
     )
@@ -1569,21 +1836,17 @@ def upload_video(user):
         filename
     )
 
+    thumbnail_filename = None
+
     try:
 
         video_file.save(
             destination
         )
+
         # ====================================================
-        # THUMBNAIL
+        # CUSTOM THUMBNAIL
         # ====================================================
-
-        thumbnail_filename = None
-
-
-        # ----------------------------------------------------
-        # Creator supplied thumbnail
-        # ----------------------------------------------------
 
         if thumbnail_file:
 
@@ -1621,17 +1884,25 @@ def upload_video(user):
                         thumbnail_destination
                     )
 
-
-        # ----------------------------------------------------
-        # No custom thumbnail
-        # → automatically extract frame from video
-        # ----------------------------------------------------
+        # ====================================================
+        # AUTOMATIC THUMBNAIL
+        # ====================================================
 
         if not thumbnail_filename:
 
-            thumbnail_filename = create_video_thumbnail(destination,config.UPLOAD_FOLDER)
+            thumbnail_filename = create_video_thumbnail(
+                destination,
+                config.UPLOAD_FOLDER
+            )
 
     except Exception as error:
+
+        # Remove video if database/save process fails
+        try:
+            if os.path.exists(destination):
+                os.remove(destination)
+        except Exception:
+            pass
 
         return jsonify({
 
@@ -1645,57 +1916,121 @@ def upload_video(user):
 
         }), 500
 
+    # ========================================================
+    # DATABASE
+    # ========================================================
+
     connection = get_connection()
 
-    cursor = connection.execute(
-        """
-        INSERT INTO videos
-        (
-            user_id,
-            title,
-            description,
-            filename,
-            thumbnail,
-            created_at
-        )
+    try:
 
-        VALUES (?, ?, ?, ?, ?, ?)
-        """,
-        (
-            user["id"],
-            title,
-            description,
-            filename,
+        print("USER ID:", user["id"])
+
+        print("VIDEO DATA:")
+        print(title)
+        print(description)
+        print(filename)
+        print(thumbnail_filename)
+        print(is_short)
+
+
+        cursor = connection.execute(
+            """
+            INSERT INTO videos
             (
-                "/media/" + thumbnail_filename
-                if thumbnail_filename
-                else None
-            ),
-            now()
+                user_id,
+                title,
+                description,
+                filename,
+                thumbnail,
+                is_short,
+                created_at
+            )
+
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                user["id"],
+                title,
+                description,
+                filename,
+                (
+                    "/media/" + thumbnail_filename
+                    if thumbnail_filename
+                    else ""
+                ),
+                is_short,
+                now()
+            )
         )
-    )
 
-    connection.commit()
 
-    video_id = cursor.lastrowid
+        connection.commit()
+
+        video_id = cursor.lastrowid
+
+
+    except Exception as error:
+
+        print(
+            "DATABASE INSERT ERROR:",
+            error
+        )
+
+        connection.rollback()
+        connection.close()
+
+        return jsonify({
+
+            "success": False,
+
+            "error": str(error)
+
+        }), 500
+
+
+        connection.close()
+
+        return jsonify({
+
+            "success": False,
+            "error": str(error)
+
+        }), 500
 
     connection.close()
+
+    # ========================================================
+    # RESPONSE
+    # ========================================================
 
     return jsonify({
 
         "success": True,
 
         "message":
+            "Short uploaded successfully"
+            if is_short
+            else
             "Video uploaded successfully",
 
         "video_id":
             video_id,
 
+        "is_short":
+            bool(is_short),
+
         "video_url":
-            "/media/" + filename
+            "/media/" + filename,
+
+        "thumbnail":
+            (
+                "/media/" + thumbnail_filename
+                if thumbnail_filename
+                else None
+            )
 
     }), 201
-
 
 # ============================================================
 # VIDEO FEED
@@ -1756,6 +2091,10 @@ def videos():
             WHERE
 
                 videos.visibility = 'public'
+
+                AND
+
+                videos.is_short = 0
 
                 AND
 
@@ -1937,6 +2276,8 @@ def get_video(video_id):
         WHERE videos.id = ?
 
           AND videos.visibility = 'public'
+
+          AND videos.is_short = 0
 
         """,
         (
@@ -2402,6 +2743,8 @@ def like_video(
 
 
 
+
+
 # ============================================================
 # SERVE VIDEO FILE
 # ============================================================
@@ -2823,6 +3166,10 @@ def for_you_feed():
         WHERE
             videos.visibility = 'public'
 
+            AND
+
+            videos.is_short = 0
+
         ORDER BY
             videos.created_at DESC
 
@@ -3224,6 +3571,10 @@ def trending_feed():
         WHERE
             videos.visibility = 'public'
 
+            AND
+
+            videos.is_short = 0
+
         ORDER BY
             (
                 (videos.views * 1) +
@@ -3332,9 +3683,13 @@ def shorts():
             videos.title,
             videos.description,
             videos.filename,
+            videos.thumbnail,
             videos.views,
             videos.likes,
+            videos.created_at,
+            videos.is_short,
 
+            users.id AS user_id,
             users.username,
             users.display_name,
             users.avatar
@@ -3342,19 +3697,23 @@ def shorts():
         FROM videos
 
         JOIN users
-        ON users.id = videos.user_id
+            ON users.id = videos.user_id
 
-        WHERE videos.visibility='public'
+        WHERE
+            videos.visibility = 'public'
 
-        ORDER BY videos.created_at DESC
+            AND
+
+            videos.is_short = 1
+
+        ORDER BY
+            videos.created_at DESC
 
         LIMIT 50
         """
     ).fetchall()
 
-
     connection.close()
-
 
     result = []
 
@@ -3362,9 +3721,11 @@ def shorts():
 
         result.append({
 
-            "id": video["id"],
+            "id":
+                video["id"],
 
-            "title": video["title"],
+            "title":
+                video["title"],
 
             "description":
                 video["description"],
@@ -3373,13 +3734,22 @@ def shorts():
                 "/media/" +
                 video["filename"],
 
+            "thumbnail":
+                video["thumbnail"],
+
             "views":
                 video["views"],
 
             "likes":
                 video["likes"],
 
+            "created_at":
+                video["created_at"],
+
             "creator": {
+
+                "id":
+                    video["user_id"],
 
                 "username":
                     video["username"],
@@ -3389,15 +3759,14 @@ def shorts():
 
                 "avatar":
                     video["avatar"]
-
             }
 
         })
 
-
     return jsonify({
 
-        "success": True,
+        "success":
+            True,
 
         "count":
             len(result),
@@ -3406,6 +3775,41 @@ def shorts():
             result
 
     })
+
+
+
+@app.route("/api/debug/videos")
+def debug_videos():
+
+    connection=get_connection()
+
+    rows=connection.execute(
+        """
+        SELECT
+            id,
+            title,
+            filename,
+            is_short,
+            visibility,
+            video_type
+        FROM videos
+        ORDER BY id DESC
+        """
+    ).fetchall()
+
+    connection.close()
+
+    return jsonify([
+        {
+            "id":row["id"],
+            "title":row["title"],
+            "filename":row["filename"],
+            "is_short":row["is_short"],
+            "visibility":row["visibility"],
+            "video_type":row["video_type"]
+        }
+        for row in rows
+    ])
 
 
 # ============================================================
@@ -3507,3 +3911,30 @@ if __name__ == "__main__":
         debug=config.DEBUG
     )
 
+# @app.route("/api/debug/videos")
+# def debug_videos():
+
+#     connection = get_connection()
+
+#     rows = connection.execute(
+#         """
+#         SELECT 
+#             id,
+#             title,
+#             is_short
+#         FROM videos
+#         ORDER BY id DESC
+#         LIMIT 20
+#         """
+#     ).fetchall()
+
+#     connection.close()
+
+#     return jsonify([
+#         {
+#             "id": row["id"],
+#             "title": row["title"],
+#             "is_short": row["is_short"]
+#         }
+#         for row in rows
+#     ])
