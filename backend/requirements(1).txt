@@ -1,19 +1,18 @@
-Flask==2.2.5
-flask-cors==4.0.0
-gunicorn==21.2.0
+Flask
+flask-cors
+gunicorn
 
-numpy==1.24.4
-opencv-python-headless==4.8.1.78
-Pillow==10.0.1
+numpy==2.2.6
+opencv-python-headless
 
-requests==2.31.0
-python-dotenv==1.0.0
-Werkzeug==2.2.3
+Pillow
+requests
+python-dotenv
+Werkzeug
 
-SQLAlchemy==1.4.54
-Flask-SQLAlchemy==3.0.5
+SQLAlchemy
+Flask-SQLAlchemy
 
-imageio==2.31.6
-imageio-ffmpeg==0.4.9
-
-PyJWT==2.8.0
+imageio
+imageio-ffmpeg
+PyJWT
