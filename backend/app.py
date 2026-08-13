@@ -706,17 +706,21 @@ function createVideoCard(
             data-youtube-id="${video.youtube_id || ''}"
         >
 
-        ${{
-            thumbnail
-            ? `
-                <img
-                    src="${escapeAttribute(
-                        thumbnail
-                    )}"
-                    alt=""
-                    class="video-thumbnail-image"
-                >
-            `
+        ${
+           thumbnail
+           ? `
+               <img
+                   src="${thumbnail}"
+                   alt=""
+                   class="video-thumbnail-image"
+               >
+           `
+           : `
+               <div
+                   class="random-thumbnail"
+                   data-video-id="${video.id}"
+               >
+           `
             : `
                 <div
                     class="random-thumbnail"
