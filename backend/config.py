@@ -8,6 +8,16 @@ class Config:
 
     APP_NAME = "CreatorOS"
 
+    import os
+
+    YOUTUBE_API_KEY = os.environ.get(
+        "YOUTUBE_API_KEY"
+    )
+
+    YOUTUBE_API_KEY =  "AIzaSyABzpqnBoBHNMeUGaoYDUiWgGb2W3wW7fA"
+
+
+
     # IMPORTANT:
     # Change this before making the application public.
     SECRET_KEY = os.environ.get(
@@ -76,5 +86,7 @@ class Config:
         "webp"
     }
 
+
+    
 
 config = Config()
