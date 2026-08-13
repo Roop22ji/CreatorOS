@@ -605,7 +605,7 @@ function renderVideos(
         container.innerHTML = `
             <div class="empty-box">
                 <div style="font-size:35px">
-                    🎬
+                    #🎬
                 </div>
 
                 <div>
