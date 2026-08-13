@@ -90,6 +90,12 @@ def initialize_database():
 
             comments_count INTEGER DEFAULT 0,
 
+            source TEXT DEFAULT 'upload',
+
+            youtube_id TEXT,
+
+            youtube_url TEXT,
+
             visibility TEXT DEFAULT 'public',
 
             is_short INTEGER DEFAULT 0,
