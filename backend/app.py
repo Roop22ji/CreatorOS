@@ -4008,7 +4008,7 @@ def for_you_feed():
     )
 
 
-    youtube_videos = get_cached_youtube(50)
+    youtube_videos = get_cached_youtube(150)
 
     print("YOUTUBE VIDEOS COUNT:", len(youtube_videos))
     print("YOUTUBE DATA:", youtube_videos[:1])
@@ -4045,7 +4045,7 @@ def for_you_feed():
 
             videos = get_channel_videos(
                 channel,
-                10
+                50
             )
 
             youtube_videos.extend(videos)
