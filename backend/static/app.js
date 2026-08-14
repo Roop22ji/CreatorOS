@@ -5784,3 +5784,20 @@ if(shortsCheckbox && videoCheckbox){
     });
 
 }
+
+function ownerRefreshFeed(){
+
+    fetch("/api/feed/for-you?refresh=1")
+    .then(response => response.json())
+    .then(data => {
+
+        console.log("Feed refreshed", data);
+
+        location.reload();
+
+    })
+    .catch(error => {
+        console.log(error);
+    });
+
+}
