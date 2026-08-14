@@ -1,5 +1,12 @@
 import os
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
+
+
+
 
 class Config:
     # ---------------------------------------------------------
@@ -14,7 +21,7 @@ class Config:
         "YOUTUBE_API_KEY"
     )
 
-    YOUTUBE_API_KEY =  "AIzaSyABzpqnBoBHNMeUGaoYDUiWgGb2W3wW7fA"
+    
 
 
 
