@@ -4022,6 +4022,8 @@ def for_you_feed():
     # Cache empty → fetch from YouTube once
     if len(youtube_videos) == 0:
 
+        print("YOUTUBE CACHE EMPTY - FETCHING NOW")
+
         youtube_videos = []
 
         for topic in selected_topics:
@@ -4032,6 +4034,8 @@ def for_you_feed():
             )
 
             youtube_videos.extend(videos)
+
+            print("FETCHED YOUTUBE VIDEOS:", len(youtube_videos))
 
 
 
