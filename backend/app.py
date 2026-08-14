@@ -4402,6 +4402,37 @@ def not_found(error):
 
 
 # ============================================================
+# DEBUG YOUTUBE CACHE
+# ============================================================
+
+@app.route("/debug/youtube")
+def debug_youtube():
+
+    from database import get_connection
+
+    conn = get_connection()
+
+    count = conn.execute(
+        "SELECT COUNT(*) FROM youtube_cache"
+    ).fetchone()[0]
+
+    conn.close()
+
+    return {
+        "youtube_cache_count": count
+    }
+
+
+# ============================================================
+# START SERVER
+# ============================================================
+
+if __name__ == "__main__":
+    app.run()
+
+
+
+# ============================================================
 # START SERVER
 # ============================================================
 
