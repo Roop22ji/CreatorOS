@@ -108,7 +108,7 @@ def initialize_database():
         )
     """)
     
-
+   
     # ========================================================
     # VIDEO TYPE MIGRATION
     # ========================================================
@@ -185,6 +185,20 @@ def initialize_database():
                 ON DELETE CASCADE
         )
     """)
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS youtube_cache (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            video_id TEXT UNIQUE,
+            title TEXT,
+            description TEXT,
+            thumbnail TEXT,
+            channel_id TEXT,
+            channel_name TEXT,
+            published_at TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """)
 
     # ========================================================
     # COMMENTS
