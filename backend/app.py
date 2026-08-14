@@ -5,6 +5,10 @@ import uuid
 import cv2
 import random
 import requests
+from dotenv import load_dotenv
+
+load_dotenv()
+
 from flask import (
     Flask,
     request,
@@ -12,17 +16,23 @@ from flask import (
     send_from_directory,
     render_template
 )
-
+import sqlite3
+from config import config
 from flask_cors import CORS
 
 from werkzeug.utils import secure_filename
 
-from config import config
+
 
 from database import (
     initialize_database,
     get_connection,
     database_test
+)
+
+from youtube_cache import (
+    save_youtube_cache,
+    get_cached_youtube
 )
 
 from auth import (
@@ -314,6 +324,10 @@ def get_youtube_videos(
 
     api_key = config.YOUTUBE_API_KEY
 
+    print("======== DEBUG API KEY ========")
+    print("API KEY LOADED"if api_key else "EMPTY")
+    print("======== END DEBUG =========")
+
     print(
         "YOUTUBE API KEY EXISTS:",
         bool(api_key)
@@ -340,24 +354,21 @@ def get_youtube_videos(
 
     params = {
 
-        "part":
-            "snippet",
+        "part": "snippet",
 
-        "q":
-            query,
+        "q": query,
 
-        "type":
-            "video",
+        "type": "video",
 
-        "maxResults":
-            limit,
+        "maxResults": limit,
 
-        "key":
-            api_key,
+        "key": api_key,
 
-        "regionCode":
-            "IN"
+        "regionCode": "IN",
 
+        "order": "date",
+
+        "relevanceLanguage": "en"
     }
 
 
@@ -522,7 +533,72 @@ def get_youtube_videos(
 
         return []
 
+def get_channel_videos(channel_id, limit=5):
 
+    api_key = config.YOUTUBE_API_KEY
+
+    url = "https://www.googleapis.com/youtube/v3/search"
+
+    params = {
+
+        "part": "snippet",
+
+        "channelId": channel_id,
+
+        "maxResults": limit,
+
+        "order": "date",
+
+        "type": "video",
+
+        "key": api_key
+    }
+
+
+    response = requests.get(
+        url,
+        params=params
+    )
+
+    data = response.json()
+
+
+    videos = []
+
+
+    for item in data.get("items", []):
+
+        video_id = item["id"]["videoId"]
+
+        videos.append({
+
+            "youtube_id": video_id,
+
+            "title":
+                item["snippet"]["title"],
+
+            "description":
+                item["snippet"]["description"],
+
+            "thumbnail":
+                item["snippet"]["thumbnails"]["high"]["url"],
+
+            "creator":
+            {
+                "username":
+                    item["snippet"]["channelTitle"],
+
+                "display_name":
+                    item["snippet"]["channelTitle"],
+
+                "verified":
+                    False
+            }
+
+        })
+
+
+    return videos
 
 # ============================================================
 # HOME / MAIN MOBILE APP
@@ -3294,6 +3370,8 @@ def creator_boost(user):
 
     })
 
+
+
 # ============================================================
 # CREATOR STUDIO ANALYTICS
 # ============================================================
@@ -3467,6 +3545,23 @@ def creator_studio(user):
     methods=["GET"]
 )
 def for_you_feed():
+
+    from flask import request
+
+    if request.args.get("refresh") == "1":
+
+        print("OWNER REFRESH: CLEARING CACHE")
+
+        conn = get_connection()
+
+        conn.execute(
+            "DELETE FROM youtube_cache"
+        )
+
+        conn.commit()
+        conn.close()
+
+        print("YOUTUBE CACHE CLEARED")
 
     
 
@@ -3870,7 +3965,7 @@ def for_you_feed():
 
         })
 
-    topics = [
+        topics = [
 
         "ravi kishan memes",
         "gaming",
@@ -3896,27 +3991,64 @@ def for_you_feed():
         "basketball",
         "sports",
 
-]
+    ]
+        channels = [
 
-    youtube_videos = []
+            
+            "UCicFN5athQLFrfZGlgtaH4Q",  # PW
+            "UCVyTlHRwDFhx4REjYR0oP8Q",  #malik
+            "UCXga7_DonV8f-ApUq2Du8KQ",  #aamirextra
+
+        ]
 
 
     selected_topics = random.sample(
         topics,
-        23
+        2
     )
 
 
-    for topic in selected_topics:
+    youtube_videos = get_cached_youtube(50)
 
-        videos = get_youtube_videos(
-            topic,
-            1
+    print(
+        "CACHE VIDEOS:",
+        len(youtube_videos)
+    )
+
+
+    # Cache empty → fetch from YouTube once
+    if len(youtube_videos) == 0:
+
+        youtube_videos = []
+
+        for topic in selected_topics:
+
+            videos = get_youtube_videos(
+                topic,
+                1
+            )
+
+            youtube_videos.extend(videos)
+
+
+
+        # ADD CHANNEL VIDEOS
+
+        for channel in channels:
+
+            videos = get_channel_videos(
+                channel,
+                10
+            )
+
+            youtube_videos.extend(videos)
+
+
+        save_youtube_cache(
+            youtube_videos
         )
 
-        youtube_videos.extend(
-            videos
-        )
+    
 
     print("YOUTUBE VIDEOS ADDED:")
     for y in youtube_videos:
@@ -3929,6 +4061,8 @@ def for_you_feed():
         "TOTAL YOUTUBE:",
         len(youtube_videos)
     )
+
+    
 
 
     result.extend(
