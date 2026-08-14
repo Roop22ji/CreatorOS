@@ -187,18 +187,52 @@ def initialize_database():
     """)
 
     cursor.execute("""
-        CREATE TABLE IF NOT EXISTS youtube_cache (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            video_id TEXT UNIQUE,
-            title TEXT,
-            description TEXT,
-            thumbnail TEXT,
-            channel_id TEXT,
-            channel_name TEXT,
-            published_at TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    CREATE TABLE IF NOT EXISTS youtube_cache (
+
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+        youtube_id TEXT UNIQUE,
+
+        title TEXT,
+
+        description TEXT DEFAULT '',
+
+        thumbnail TEXT DEFAULT '',
+
+        channel_title TEXT DEFAULT '',
+
+        youtube_url TEXT,
+
+        created_at INTEGER NOT NULL
+    )
+    """)
+
+
+
+    youtube_columns = cursor.execute(
+        "PRAGMA table_info(youtube_cache)"
+    ).fetchall()
+
+    youtube_column_names = [
+        column["name"]
+        for column in youtube_columns
+    ]
+
+
+    if "youtube_id" not in youtube_column_names:
+        cursor.execute(
+            "ALTER TABLE youtube_cache ADD COLUMN youtube_id TEXT"
         )
-        """)
+
+    if "channel_title" not in youtube_column_names:
+        cursor.execute(
+            "ALTER TABLE youtube_cache ADD COLUMN channel_title TEXT DEFAULT ''"
+        )
+
+    if "youtube_url" not in youtube_column_names:
+        cursor.execute(
+            "ALTER TABLE youtube_cache ADD COLUMN youtube_url TEXT"
+        )
 
     # ========================================================
     # COMMENTS
