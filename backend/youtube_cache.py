@@ -131,5 +131,5 @@ def get_cached_youtube(limit=50):
 
         })
 
-
+    print("YouTube cache videos:", len(rows))
     return videos
