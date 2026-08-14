@@ -4010,6 +4010,9 @@ def for_you_feed():
 
     youtube_videos = get_cached_youtube(50)
 
+    print("YOUTUBE VIDEOS COUNT:", len(youtube_videos))
+    print("YOUTUBE DATA:", youtube_videos[:1])
+
     print(
         "CACHE VIDEOS:",
         len(youtube_videos)
@@ -4491,22 +4494,3 @@ if __name__ == "__main__":
 #         }
 #         for row in rows
 #     ])
-
-@app.route("/debug/youtube")
-def debug_youtube():
-
-    import sqlite3
-
-    conn = sqlite3.connect(config.DATABASE_PATH)
-
-    count = conn.execute(
-        "SELECT COUNT(*) FROM youtube_cache"
-    ).fetchone()[0]
-
-    conn.close()
-
-    return {
-        "youtube_cache_count": count
-    }
-
-
