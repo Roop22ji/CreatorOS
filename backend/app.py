@@ -3911,7 +3911,7 @@ def for_you_feed():
 
         videos = get_youtube_videos(
             topic,
-            10
+            1
         )
 
         youtube_videos.extend(
