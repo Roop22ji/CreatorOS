@@ -52,7 +52,44 @@ CHANNELS = {
 
         ]
 
-    }
+    },
+    "random": {
+
+        "channel_title": "random",
+
+        "category": "gaming",
+
+        "videos": [
+
+            "https://www.youtube.com/watch?v=MPmKAk7mjDo",
+            "https://www.youtube.com/watch?v=b7A3Pbny-7M",
+            "https://www.youtube.com/watch?v=YtO22syoxFg&t=468s",
+            "https://www.youtube.com/watch?v=7xxeWVBOViQ",
+            "https://www.youtube.com/watch?v=zf2iFLkHWP8",
+            "https://www.youtube.com/watch?v=Af6i6ChAVTw",
+            "https://www.youtube.com/watch?v=pzBi1nwDn8U",
+            "https://www.youtube.com/watch?v=MW_q00eHyfY",
+            "https://www.youtube.com/watch?v=YpTgLi1detk",
+            "https://www.youtube.com/watch?v=2znLf_9fPrc",
+            "https://www.youtube.com/watch?v=gLAjowInE6s",
+            "https://www.youtube.com/watch?v=bbHx4M7CAGw",
+    
+            "https://www.youtube.com/watch?v=jR6Y4H87Bag",
+            "https://www.youtube.com/watch?v=_pUa1UQEctQ",
+            "https://www.youtube.com/watch?v=q6Do9Qj_cMs",
+            "https://www.youtube.com/watch?v=DdUWrJcE4uI",
+            "https://www.youtube.com/watch?v=kLujv40zGFE",
+            "https://www.youtube.com/watch?v=bnDecJ1X6Wg",
+            "https://www.youtube.com/watch?v=I_WXKWgwRvM",
+            "https://www.youtube.com/watch?v=VKe2u_tEWVo",
+            "https://www.youtube.com/watch?v=ZungsQqN8qQ",
+            "https://www.youtube.com/watch?v=uyXI_xSZ1Lg"
+        
+            
+
+        ]
+
+    },
 
 
 }
