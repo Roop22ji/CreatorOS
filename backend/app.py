@@ -3576,30 +3576,30 @@ def for_you_feed():
 
         print("OWNER REFRESH STARTED")
 
-        topics = [
-            "gaming",
-            "Minecraft",
-            "GTA 5 gameplay",
-            "football highlights",
-            "cricket",
-            "AI technology",
-            "technology news",
-            "science",
-            "space",
-            "coding",
-            "programming",
-            "movies",
-            "music",
-            "funny shorts",
-            "animals",
-            "memes",
-            "education",
-            "fitness",
-            "travel",
-            "free fire",
-            "basketball",
-            "sports",
-        ]
+        # topics = [
+        #     "gaming",
+        #     "Minecraft",
+        #     "GTA 5 gameplay",
+        #     "football highlights",
+        #     "cricket",
+        #     "AI technology",
+        #     "technology news",
+        #     "science",
+        #     "space",
+        #     "coding",
+        #     "programming",
+        #     "movies",
+        #     "music",
+        #     "funny shorts",
+        #     "animals",
+        #     "memes",
+        #     "education",
+        #     "fitness",
+        #     "travel",
+        #     "free fire",
+        #     "basketball",
+        #     "sports",
+        # ]
 
 
         channels = [
@@ -3614,22 +3614,22 @@ def for_you_feed():
         new_videos = []
 
 
-        selected_topics = random.sample(
-            topics,
-            0
-        )
+        # selected_topics = random.sample(
+        #     topics,
+        #     0
+        # )
 
 
-        for topic in selected_topics:
+        # for topic in selected_topics:
 
-            videos = get_youtube_videos(
-                topic,
-                0
-            )
+        #     videos = get_youtube_videos(
+        #         topic,
+        #         0
+        #     )
 
-            new_videos.extend(
-                videos
-            )
+        #     new_videos.extend(
+        #         videos
+        #     )
 
 
         for channel in channels:
@@ -4062,7 +4062,33 @@ def for_you_feed():
 
         })
 
-      
+        topics = [
+
+            "ravi kishan memes",
+            "gaming",
+            "Minecraft",
+            "GTA 5 gameplay",
+            "football highlights",
+            "cricket",
+            "AI technology",
+            "technology news",
+            "science",
+            "space",
+            "coding",
+            "programming",
+            "movies",
+            "music",
+            "funny shorts",
+            "animals",
+            "memes",
+            "education",
+            "fitness",
+            "travel",
+            "free fire",
+            "basketball",
+            "sports",
+
+        ]
 
 
         channels = [
@@ -4077,7 +4103,7 @@ def for_you_feed():
 
 
         # Load old videos
-        youtube_videos = get_cached_youtube(250)
+        youtube_videos = get_cached_youtube(150)
 
 
         print(
@@ -4087,7 +4113,25 @@ def for_you_feed():
 
 
         # Add some new videos periodically
-      
+        selected_topics = random.sample(
+            topics,
+            2
+        )
+
+
+        new_videos = []
+
+
+        for topic in selected_topics:
+
+            videos = get_youtube_videos(
+                topic,
+                5
+            )
+
+            new_videos.extend(
+                videos
+            )
 
 
         for channel in channels:
@@ -4129,7 +4173,7 @@ def for_you_feed():
 
     
     youtube_videos = get_cached_youtube(
-        250
+        150
     )
 
     print(
