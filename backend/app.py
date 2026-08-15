@@ -21,7 +21,7 @@ from config import config
 from flask_cors import CORS
 
 from werkzeug.utils import secure_filename
-
+from youtube_channels import build_channel_videos
 
 
 from database import (
@@ -35,6 +35,7 @@ from youtube_cache import (
     get_cached_youtube,
     youtube_cache_count
 )
+
 
 from auth import (
     hash_password,
@@ -3561,7 +3562,9 @@ def creator_studio(user):
 
 
 # ============================================================
-# FOR YOU FEED + CREATOR BOOST
+# FOR YOU FEED
+# YOUTUBE + CREATOR CONTENT
+# NO YOUTUBE API
 # ============================================================
 
 @app.route(
@@ -3570,198 +3573,289 @@ def creator_studio(user):
 )
 def for_you_feed():
 
-    from flask import request
+    # ========================================================
+    # YOUTUBE CATALOG
+    #
+    # IMPORTANT:
+    # This uses YOUTUBE_CATALOG only.
+    #
+    # NO:
+    # - YouTube API
+    # - API key
+    # - get_youtube_videos()
+    # - get_channel_videos()
+    # - YouTube API refresh
+    # ========================================================
 
-    # ============================================================
-    # YOUTUBE CHANNEL CACHE
-    # ONLY CHANNEL VIDEOS
-    # ============================================================
+    youtube_videos = []
 
-    channels = [
-
-        "UCicFN5athQLFrfZGlgtaH4Q",
-        "UCVyTlHRwDFhx4REjYR0oP8Q",
-        "UCXga7_DonV8f-ApUq2Du8KQ",
-        "UCjvgGbPPn-FgYeguc5nxG4A",
-        "UC_c-VuxCs5P6wv5dKWk-Mrw",
-
-    ]
-
-
-    # ------------------------------------------------------------
-    # LOAD EXISTING CACHE
-    # ------------------------------------------------------------
-
-    youtube_videos = get_cached_youtube(500)
-
-    print(
-        "EXISTING YOUTUBE CACHE:",
-        len(youtube_videos)
-    )
-
-
-    # ------------------------------------------------------------
-    # OWNER REFRESH
-    # ------------------------------------------------------------
-
-    if request.args.get("refresh") == "1":
-
-        print("================================")
-        print("OWNER YOUTUBE REFRESH")
-        print("================================")
-
-        new_videos = []
-
-        for channel in channels:
-
-            print(
-                "FETCHING CHANNEL:",
-                channel
-            )
-
-            try:
-
-                videos = get_channel_videos(
-                    channel,
-                    10
-                )
-
-                print(
-                    "CHANNEL VIDEOS:",
-                    len(videos)
-                )
-
-                new_videos.extend(
-                    videos
-                )
-
-            except Exception as error:
-
-                print(
-                    "CHANNEL ERROR:",
-                    channel,
-                    repr(error)
-                )
-
-
-        print(
-            "TOTAL NEW CHANNEL VIDEOS:",
-            len(new_videos)
-        )
-
-
-        # --------------------------------------------------------
-        # SAVE ONLY CHANNEL VIDEOS
-        # --------------------------------------------------------
-
-        if new_videos:
-
-            save_youtube_cache(
-                new_videos
-            )
-
-            print(
-                "CACHE SAVED:"
-            )
-
-        else:
-
-            print(
-                "NO NEW VIDEOS TO SAVE"
-            )
-
-
-        print(
-            "TOTAL CACHE AFTER REFRESH:",
-            youtube_cache_count()
-        )
-
-
-    # ------------------------------------------------------------
-    # LOAD CACHE FOR FEED
-    # ------------------------------------------------------------
-
-    youtube_videos = get_cached_youtube(500)
-
-    print(
-        "FINAL YOUTUBE FEED:",
-        len(youtube_videos)
-    )
 
     
+    
+
+
+    # ============================================================
+    # CHANNEL MANAGER
+    # ============================================================
+
+    youtube_sources = build_channel_videos()
+    
+    try:
+
+        for video in youtube_sources:
+
+            youtube_id = (
+                video.get("youtube_id")
+                or video.get("id")
+                or ""
+            )
+
+            if not youtube_id:
+                continue
+
+            # ------------------------------------------------
+            # Remove prefix if catalog uses youtube_XXXX
+            # ------------------------------------------------
+
+            if youtube_id.startswith("youtube_"):
+
+                youtube_id = youtube_id.replace(
+                    "youtube_",
+                    "",
+                    1
+                )
+
+            # ------------------------------------------------
+            # Creator information
+            # ------------------------------------------------
+
+            creator = video.get(
+                "creator",
+                {}
+            )
+
+            if not isinstance(
+                creator,
+                dict
+            ):
+                creator = {}
+
+            channel_name = (
+                creator.get("display_name")
+                or creator.get("username")
+                or video.get(
+                    "channel_title",
+                    "YouTube"
+                )
+            )
+
+            # ------------------------------------------------
+            # Build standard feed object
+            # ------------------------------------------------
+
+            youtube_videos.append({
+
+                "id":
+                    "youtube_" + youtube_id,
+
+                "title":
+                    video.get(
+                        "title",
+                        "YouTube Video"
+                    ),
+
+                "description":
+                    video.get(
+                        "description",
+                        ""
+                    ),
+
+                "video_url":
+                    "https://www.youtube.com/embed/"
+                    + youtube_id,
+
+                "source":
+                    "youtube",
+
+                "youtube_id":
+                    youtube_id,
+
+                "youtube_url":
+                    "https://www.youtube.com/embed/"
+                    + youtube_id,
+
+                "thumbnail":
+                    video.get(
+                        "thumbnail",
+                        ""
+                    ),
+
+                "views":
+                    video.get(
+                        "views",
+                        0
+                    ),
+
+                "likes":
+                    video.get(
+                        "likes",
+                        0
+                    ),
+
+                "comments":
+                    video.get(
+                        "comments",
+                        0
+                    ),
+
+                "created_at":
+                    video.get(
+                        "created_at",
+                        0
+                    ),
+
+                "boosted":
+                    False,
+
+                "boost_level":
+                    0,
+
+                "creator": {
+
+                    "id":
+                        video.get(
+                            "channel_id",
+                            "youtube"
+                        ),
+
+                    "username":
+                        channel_name,
+
+                    "display_name":
+                        channel_name,
+
+                    "avatar":
+                        creator.get(
+                            "avatar",
+                            ""
+                        ),
+
+                    "verified":
+                        bool(
+                            creator.get(
+                                "verified",
+                                False
+                            )
+                        )
+                }
+            })
+
+    except Exception as error:
+
+        print(
+            "NO-API YOUTUBE CATALOG ERROR:",
+            repr(error)
+        )
+
+        youtube_videos = []
+
+
+    print(
+        "========================================"
+    )
+
+    print(
+        "NO-API YOUTUBE FEED"
+    )
+
+    print(
+        "YOUTUBE CATALOG VIDEOS:",
+        len(youtube_videos)
+    )
+
+    print(
+        "========================================"
+    )
+
+
+    # ========================================================
+    # DATABASE
+    # CREATOR VIDEOS
+    # ========================================================
 
     connection = get_connection()
 
-    # --------------------------------------------------------
-    # Get public videos
-    # --------------------------------------------------------
+    try:
 
-    rows = connection.execute(
-        """
-        SELECT
+        rows = connection.execute(
+            """
+            SELECT
 
-            videos.id,
-            videos.title,
-            videos.description,
-            videos.filename,
-            videos.source,
-            videos.youtube_id,
-            videos.youtube_url,
-            videos.thumbnail,
-            videos.views,
-            videos.likes,
-            videos.comments_count,
-            videos.created_at,
-            
+                videos.id,
+                videos.title,
+                videos.description,
+                videos.filename,
+                videos.source,
+                videos.youtube_id,
+                videos.youtube_url,
+                videos.thumbnail,
+                videos.views,
+                videos.likes,
+                videos.comments_count,
+                videos.created_at,
 
-            users.id AS user_id,
-            users.username,
-            users.display_name,
-            users.avatar,
-            users.verified
+                users.id AS user_id,
+                users.username,
+                users.display_name,
+                users.avatar,
+                users.verified
 
-        FROM videos
+            FROM videos
 
-        JOIN users
-            ON users.id = videos.user_id
+            JOIN users
+                ON users.id = videos.user_id
 
-        WHERE
-            videos.visibility = 'public'
+            WHERE
+                videos.visibility = 'public'
 
-            AND
+                AND
 
-            videos.is_short = 0
+                videos.is_short = 0
 
-        ORDER BY
-            videos.created_at DESC
+            ORDER BY
+                videos.created_at DESC
 
-        LIMIT 200
-        """
-    ).fetchall()
+            LIMIT 200
+            """
+        ).fetchall()
+
+    finally:
+
+        connection.close()
 
 
-    # --------------------------------------------------------
-    # Calculate Creator Boost level for every creator
-    # --------------------------------------------------------
+    # ========================================================
+    # CREATOR STATISTICS
+    # ========================================================
 
     creator_stats = {}
+
 
     for video in rows:
 
         creator_id = video["user_id"]
 
-
         views = int(
             video["views"] or 0
-            )
+        )
 
         likes = int(
-                video["likes"] or 0
-            )
+            video["likes"] or 0
+        )
 
         comments = int(
-                video["comments_count"] or 0
-            )
+            video["comments_count"] or 0
+        )
 
 
         if creator_id not in creator_stats:
@@ -3775,7 +3869,6 @@ def for_you_feed():
                 "likes": 0,
 
                 "comments": 0
-
             }
 
 
@@ -3794,9 +3887,9 @@ def for_you_feed():
         ]["comments"] += comments
 
 
-    # --------------------------------------------------------
-    # Convert score → boost level
-    # --------------------------------------------------------
+    # ========================================================
+    # BOOST LEVEL
+    # ========================================================
 
     def get_boost_level(
         score,
@@ -3805,51 +3898,61 @@ def for_you_feed():
         total_comments
     ):
 
-        # New creators always receive
-        # an initial discovery opportunity.
+        # New creators get discovery opportunity
+
         if total_views < 20:
 
             return 1
 
+
         engagement_rate = 0
+
 
         if total_views > 0:
 
             engagement_rate = (
+
                 (
-                    total_likes +
+                    total_likes
+                    +
                     total_comments
                 )
+
                 /
+
                 total_views
+
             ) * 100
 
 
         # Strong engagement
+
         if (
             total_views >= 100
-            and engagement_rate >= 8
+            and
+            engagement_rate >= 8
         ):
 
             return 3
 
 
         # Growing creator
+
         if (
             total_views >= 20
-            and engagement_rate >= 5
+            and
+            engagement_rate >= 5
         ):
 
             return 2
 
 
-        # Still eligible for beginner boost
         return 1
 
 
-    # --------------------------------------------------------
-    # Score each video
-    # --------------------------------------------------------
+    # ========================================================
+    # SCORE CREATOR VIDEOS
+    # ========================================================
 
     current_time = now()
 
@@ -3871,61 +3974,89 @@ def for_you_feed():
         )
 
         created_at = int(
-            video["created_at"] or
+            video["created_at"]
+            or
             current_time
         )
+
+
+        # ----------------------------------------------------
+        # VIDEO AGE
+        # ----------------------------------------------------
 
         age_hours = max(
             0,
             (
-                current_time -
+                current_time
+                -
                 created_at
             ) / 3600
         )
 
 
         # ----------------------------------------------------
-        # Normal recommendation score
+        # ENGAGEMENT
         # ----------------------------------------------------
 
         engagement_score = (
+
             views * 0.5
+
             +
+
             likes * 5
+
             +
+
             comments * 8
         )
 
 
+        # ----------------------------------------------------
+        # FRESHNESS
+        # ----------------------------------------------------
+
         freshness_score = max(
+
             0,
-            100 -
-            (age_hours * 2)
+
+            100
+            -
+            (
+                age_hours * 2
+            )
         )
 
 
         # ----------------------------------------------------
-        # Creator boost
+        # CREATOR BOOST
         # ----------------------------------------------------
 
         creator = creator_stats.get(
-                video["user_id"],
-                {
-                    "views": 0,
-                    "likes": 0,
-                    "comments": 0
-                }
-            )
+
+            video["user_id"],
+
+            {
+                "views": 0,
+                "likes": 0,
+                "comments": 0
+            }
+        )
 
 
         creator_total_score = (
+
             creator["views"]
+
             +
+
             (
                 creator["likes"]
                 * 5
             )
+
             +
+
             (
                 creator["comments"]
                 * 8
@@ -3934,31 +4065,41 @@ def for_you_feed():
 
 
         boost_level = get_boost_level(
-                creator_total_score,
-                creator["views"],
-                creator["likes"],
-                creator["comments"]
-            )
+
+            creator_total_score,
+
+            creator["views"],
+
+            creator["likes"],
+
+            creator["comments"]
+        )
+
 
         boost_bonus = {
+
             0: 0,
+
             1: 40,
+
             2: 80,
+
             3: 120
+
         }.get(
+
             boost_level,
+
             0
         )
 
 
         # ----------------------------------------------------
-        # Beginner protection
-        #
-        # Small creators receive a modest extra chance.
-        # The bonus is capped.
+        # BEGINNER BONUS
         # ----------------------------------------------------
 
         beginner_bonus = 0
+
 
         if views < 100:
 
@@ -3969,13 +4110,24 @@ def for_you_feed():
             beginner_bonus = 15
 
 
+        # ----------------------------------------------------
+        # FINAL SCORE
+        # ----------------------------------------------------
+
         final_score = (
+
             engagement_score
+
             +
+
             freshness_score
+
             +
+
             boost_bonus
+
             +
+
             beginner_bonus
         )
 
@@ -3993,24 +4145,25 @@ def for_you_feed():
 
             "boosted":
                 boost_level > 0
-
         })
 
 
-    # --------------------------------------------------------
-    # Sort recommendations
-    # --------------------------------------------------------
+    # ========================================================
+    # SORT CREATOR VIDEOS
+    # ========================================================
 
     scored_videos.sort(
+
         key=lambda item:
             item["score"],
+
         reverse=True
     )
 
 
-    # --------------------------------------------------------
-    # Build response
-    # --------------------------------------------------------
+    # ========================================================
+    # BUILD CREATOR FEED
+    # ========================================================
 
     result = []
 
@@ -4018,6 +4171,7 @@ def for_you_feed():
     for item in scored_videos[:100]:
 
         video = item["video"]
+
 
         result.append({
 
@@ -4032,9 +4186,16 @@ def for_you_feed():
 
             "video_url":
                 (
-                    "/media/" + video["filename"]
-                    if video["source"] != "youtube"
-                    else ""
+                    "/media/"
+                    +
+                    video["filename"]
+
+                    if video["source"]
+                    !=
+                    "youtube"
+
+                    else
+                    ""
                 ),
 
             "source":
@@ -4085,141 +4246,47 @@ def for_you_feed():
                     bool(
                         video["verified"]
                     )
-
             }
-
         })
 
-    topics = [
 
-        "ravi kishan memes",
-        "gaming",
-        "Minecraft",
-        "GTA 5 gameplay",
-        "football highlights",
-        "cricket",
-        "AI technology",
-        "technology news",
-        "science",
-        "space",
-        "coding",
-        "programming",
-        "movies",
-        "music",
-        "funny shorts",
-        "animals",
-        "memes",
-        "education",
-        "fitness",
-        "travel",
-        "free fire",
-        "basketball",
-        "sports",
-
-    ]
-
-
-    channels = [
-
-        "UCicFN5athQLFrfZGlgtaH4Q",
-        "UCVyTlHRwDFhx4REjYR0oP8Q",
-        "UCXga7_DonV8f-ApUq2Du8KQ",
-        "UCjvgGbPPn-FgYeguc5nxG4A", #saurav joshi
-        "UC_c-VuxCs5P6wv5dKWk-Mrw", #guru kirpa live
-
-    ]
-
-
-    # Load old videos
-    youtube_videos = get_cached_youtube(150)
-
-
-    print(
-        "OLD CACHE VIDEOS:",
-        len(youtube_videos)
-    )
-
-
-    # Add some new videos periodically
-    selected_topics = random.sample(
-        topics,
-        2
-    )
-
-
-    new_videos = []
-
-
-    for topic in selected_topics:
-
-        videos = get_youtube_videos(
-            topic,
-            5
-        )
-
-        new_videos.extend(
-            videos
-        )
-
-
-    for channel in channels:
-
-        videos = get_channel_videos(
-            channel,
-            10
-        )
-
-        new_videos.extend(
-            videos
-        )
-
-
-    print(
-        "NEW VIDEOS FOUND:",
-        len(new_videos)
-    )
-
-
-    # Save new videos without deleting old
-    if new_videos:
-
-        save_youtube_cache(
-            new_videos
-        )
-
-
-    # Reload mixed feed
-    youtube_videos = get_cached_youtube(
-        150
-    )
-
-
-    print(
-        "FINAL YOUTUBE FEED:",
-        len(youtube_videos)
-    )
-
-    
-    youtube_videos = get_cached_youtube(
-        150
-    )
-
-    print(
-        "CACHE FEED:",
-        len(youtube_videos)
-    )
-
+    # ========================================================
+    # ADD NO-API YOUTUBE VIDEOS
+    # ========================================================
 
     result.extend(
         youtube_videos
     )
-    
 
 
-    # result.extend(
-    #     youtube_videos
-    # )
-    random.shuffle(result)
+    # ========================================================
+    # SHUFFLE MIXED FEED
+    # ========================================================
+
+    random.shuffle(
+        result
+    )
+
+
+    # ========================================================
+    # FINAL RESPONSE
+    # ========================================================
+
+    print(
+        "CREATOR VIDEOS:",
+        len(scored_videos[:100])
+    )
+
+    print(
+        "YOUTUBE VIDEOS:",
+        len(youtube_videos)
+    )
+
+    print(
+        "TOTAL MIXED FEED:",
+        len(result)
+    )
+
 
     return jsonify({
 
@@ -4231,9 +4298,7 @@ def for_you_feed():
 
         "videos":
             result
-
     })
-
 
 
 
