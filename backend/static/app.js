@@ -660,34 +660,101 @@ function createVideoCard(
     card.className =
         "video-card";
 
+
     const creator =
         video.creator || {};
 
+
+    /* =====================================================
+       DETECT YOUTUBE
+    ===================================================== */
+
+    const isYouTube =
+        video.source === "youtube";
+
+
+    /* =====================================================
+       VIDEO URL
+    ===================================================== */
+
     const videoUrl =
+        !isYouTube &&
         video.video_url
             ? api(
                 video.video_url
             )
             : "";
 
-    const thumbnail =
-        video.source === "youtube"
-        ?
-        `https://img.youtube.com/vi/${video.youtube_id}/hqdefault.jpg`
-        :
+
+    /* =====================================================
+       YOUTUBE ID
+    ===================================================== */
+
+    const youtubeId =
+        video.youtube_id ||
+        "";
+
+
+    /* =====================================================
+       THUMBNAIL
+    ===================================================== */
+
+    let thumbnail = "";
+
+
+    if (
+        isYouTube &&
+        youtubeId
+    ) {
+    
+        thumbnail =
+            "https://img.youtube.com/vi/" +
+            encodeURIComponent(
+                youtubeId
+            ) +
+            "/0.jpg";
+    }
+
+    else if (
+        video.thumbnail
+    ) {
+
+        thumbnail =
+            api(
+                video.thumbnail
+            );
+
+    }
+
+
+    /* =====================================================
+       CREATOR NAME
+    ===================================================== */
+
+    const creatorName =
+        creator.display_name ||
+        creator.username ||
         (
-            video.thumbnail
-            ?
-            api(video.thumbnail)
-            :
-            ""
+            isYouTube
+                ? "YouTube"
+                : "Creator"
         );
 
-    const isYouTube =
-        video.source === "youtube";
+
+    const creatorUsername =
+        creator.username ||
+        (
+            isYouTube
+                ? "youtube"
+                : "creator"
+        );
+
+
+    /* =====================================================
+       CARD HTML
+    ===================================================== */
 
     card.innerHTML = `
-        
 
         ${
             video.boosted
@@ -699,78 +766,161 @@ function createVideoCard(
             : ""
         }
 
+
         <div
-            class="video-preview"
-            data-video-id="${video.id}"
-            data-source="${video.source || 'creator'}"
-            data-youtube-id="${video.youtube_id || ''}"
+            class="video-preview
+            ${isYouTube ? "youtube-preview" : ""}"
+
+            data-video-id="${escapeAttribute(
+                String(video.id)
+            )}"
+
+            data-source="${escapeAttribute(
+                video.source || "creator"
+            )}"
+
+            data-youtube-id="${escapeAttribute(
+                youtubeId
+            )}"
         >
 
-        ${
-            thumbnail
-            ? `
-                <img
-                    src="${escapeAttribute(
-                        thumbnail
-                    )}"
-                    alt=""
-                    class="video-thumbnail-image"
-                >
-            `
-            : `
-                <div
-                    class="random-thumbnail"
-                    data-video-id="${video.id}"
-                >
-        
-                    <div class="random-thumbnail-icon">
-                        ${getRandomThumbnailIcon(
-                            video.id
-                        )}
-                    </div>
-        
-                    <div class="random-thumbnail-title">
-                        ${escapeHtml(
+
+            ${
+                thumbnail
+                ? `
+
+                    <img
+                        src="${escapeAttribute(
+                            thumbnail
+                        )}"
+                    
+                        onerror="
+                            this.onerror=null;
+                            this.src='https://i.ytimg.com/vi/${encodeURIComponent(youtubeId)}/0.jpg';
+                        "
+                    
+                        alt="${escapeAttribute(
                             video.title ||
-                            "Creator Video"
-                        )}
+                            "Video"
+                        )}"
+                    
+                        class="video-thumbnail-image"
+                    
+                        loading="lazy"
+                    >
+
+                       
+
+                `
+                : `
+
+                    <div
+                        class="random-thumbnail"
+
+                        data-video-id="${escapeAttribute(
+                            String(video.id)
+                        )}"
+                    >
+
+                        <div
+                            class="random-thumbnail-icon"
+                        >
+
+                            ${getRandomThumbnailIcon(
+                                video.id
+                            )}
+
+                        </div>
+
+
+                        <div
+                            class="random-thumbnail-title"
+                        >
+
+                            ${escapeHtml(
+                                video.title ||
+                                "Creator Video"
+                            )}
+
+                        </div>
+
                     </div>
-        
-                </div>
-            `
-        }
+
+                `
+            }
+
 
             <div class="video-play">
+
                 ▶
+
             </div>
+
+
+            ${
+                isYouTube
+                ? `
+
+                    <div
+                        class="youtube-badge"
+                    >
+                        ▶ YouTube
+                    </div>
+
+                `
+                : ""
+            }
+
 
         </div>
 
+
         <div class="video-info">
 
-            <h2 class="video-title">
+
+            <h2
+                class="video-title"
+            >
+
                 ${escapeHtml(
                     video.title ||
                     "Untitled"
                 )}
+
             </h2>
 
+
             <div
-                class="video-creator creator-clickable"
+                class="video-creator
+                       creator-clickable"
+
                 data-creator="${escapeAttribute(
-                    creator.username ||
-                    "creator"
+                    creatorUsername
                 )}"
             >
-            
-                @${escapeHtml(
-                    creator.username ||
-                    "creator"
+
+                ${escapeHtml(
+                    creatorName
                 )}
-        
+
+                ${
+                    creator.verified
+                    ? " ✓"
+                    : ""
+                }
+
+                <span>
+                    @${escapeHtml(
+                        creatorUsername
+                    )}
+                </span>
+
             </div>
 
-            <div class="video-stats">
+
+            <div
+                class="video-stats"
+            >
 
                 👁 ${Number(
                     video.views || 0
@@ -790,44 +940,83 @@ function createVideoCard(
 
             </div>
 
+
             ${
                 video.description
                 ? `
-                    <div class="video-description">
+
+                    <div
+                        class="video-description"
+                    >
 
                         ${escapeHtml(
                             video.description
                         )}
 
                     </div>
+
                 `
                 : ""
             }
 
+
         </div>
 
     `;
+
+
+    /* =====================================================
+       PREVIEW
+    ===================================================== */
 
     const preview =
         card.querySelector(
             ".video-preview"
         );
 
-    if(
-        isYouTube &&
-        video.youtube_id
-    ){
-    
-        preview.dataset.youtube =
-            video.youtube_id;
-    
+
+    if (
+        !preview
+    ) {
+
+        return card;
+
     }
+
+
+    /* =====================================================
+       YOUTUBE DATA
+    ===================================================== */
+
+    if (
+        isYouTube &&
+        youtubeId
+    ) {
+
+        preview.dataset.youtube =
+            youtubeId;
+
+    }
+
+
+    /* =====================================================
+       VIDEO CLICK
+    ===================================================== */
 
     preview.addEventListener(
         "click",
-        () => {
+        event => {
 
-            console.log("CLICK DATA FULL", JSON.stringify(video, null, 2));
+            event.preventDefault();
+
+            event.stopPropagation();
+
+
+            console.log(
+                "VIDEO CLICK:",
+                video
+            );
+
 
             openVideo(
                 video
@@ -836,20 +1025,29 @@ function createVideoCard(
         }
     );
 
-    
+
+    /* =====================================================
+       CREATOR CLICK
+    ===================================================== */
 
     const creatorElement =
-    card.querySelector(
-        ".creator-clickable"
-    );
+        card.querySelector(
+            ".creator-clickable"
+        );
 
-    if (creatorElement) {
+
+    if (
+        creatorElement
+    ) {
 
         creatorElement.addEventListener(
             "click",
             event => {
 
+                event.preventDefault();
+
                 event.stopPropagation();
+
 
                 openCreatorProfile(
                     creatorElement.dataset.creator
@@ -859,6 +1057,7 @@ function createVideoCard(
         );
 
     }
+
 
     return card;
 
