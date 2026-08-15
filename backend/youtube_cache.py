@@ -12,46 +12,85 @@ def save_youtube_cache(videos):
 
     for video in videos:
 
-        connection.execute(
-            """
-            INSERT OR REPLACE INTO youtube_cache
-            (
-                youtube_id,
-                title,
-                description,
-                thumbnail,
-                channel_title,
-                youtube_url,
-                created_at
+        try:
+
+            connection.execute(
+                """
+                INSERT OR IGNORE INTO youtube_cache
+                (
+                    youtube_id,
+                    title,
+                    description,
+                    thumbnail,
+                    channel_title,
+                    youtube_url,
+                    created_at
+                )
+
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+
+                (
+                    video["youtube_id"],
+
+                    video.get(
+                        "title",
+                        ""
+                    ),
+
+                    video.get(
+                        "description",
+                        ""
+                    ),
+
+                    video.get(
+                        "thumbnail",
+                        ""
+                    ),
+
+                    video.get(
+                        "creator",
+                        {}
+                    ).get(
+                        "username",
+                        "YouTube"
+                    ),
+
+                    "https://youtube.com/watch?v="
+                    + video["youtube_id"],
+
+                    int(time.time())
+                )
             )
 
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            """,
 
-            (
-                video["youtube_id"],
-                video["title"],
-                video.get("description", ""),
-                video.get("thumbnail", ""),
-                video["creator"]["username"],
-                "https://youtube.com/watch?v="
-                + video["youtube_id"],
-                int(time.time())
+        except Exception as e:
+
+            print(
+                "CACHE SAVE ERROR:",
+                e
             )
-        )
+
 
     connection.commit()
     connection.close()
 
 
+    print(
+        "CACHE SAVED:",
+        len(videos)
+    )
+
+
 
 # ============================================================
-# LOAD FROM CACHE
+# LOAD YOUTUBE CACHE (OLD + NEW MIX)
 # ============================================================
 
-def get_cached_youtube(limit=50):
+def get_cached_youtube(limit=100, offset=0):
 
     connection = get_connection()
+
 
     rows = connection.execute(
         """
@@ -59,11 +98,17 @@ def get_cached_youtube(limit=50):
 
         FROM youtube_cache
 
-        ORDER BY created_at DESC
+        ORDER BY RANDOM()
 
         LIMIT ?
+        OFFSET ?
+
         """,
-        (limit,)
+        (
+            limit,
+            offset
+        )
+
     ).fetchall()
 
 
@@ -75,61 +120,137 @@ def get_cached_youtube(limit=50):
 
     for row in rows:
 
-        videos.append({
+        videos.append(
 
-            "id":
-                "youtube_" + row["youtube_id"],
-
-            "source":
-                "youtube",
-
-            "youtube_id":
-                row["youtube_id"],
-
-            "youtube_url":
-                row["youtube_url"],
-
-            "video_url":
-                "https://www.youtube.com/embed/"
-                + row["youtube_id"],
-
-            "title":
-                row["title"],
-
-            "description":
-                row["description"],
-
-            "thumbnail":
-                row["thumbnail"],
-
-            "views":
-                0,
-
-            "likes":
-                0,
-
-            "comments":
-                0,
-
-            "boosted":
-                True,
-
-            "boost_level":
-                1,
-
-            "creator":
             {
-                "username":
-                    row["channel_title"],
 
-                "display_name":
-                    row["channel_title"],
+                "id":
+                    "youtube_"
+                    + row["youtube_id"],
 
-                "verified":
-                    False
+
+                "source":
+                    "youtube",
+
+
+                "youtube_id":
+                    row["youtube_id"],
+
+
+                "youtube_url":
+                    row["youtube_url"],
+
+
+                "video_url":
+                    "https://www.youtube.com/embed/"
+                    + row["youtube_id"],
+
+
+                "title":
+                    row["title"],
+
+
+                "description":
+                    row["description"],
+
+
+                "thumbnail":
+                    row["thumbnail"],
+
+
+                "views":
+                    0,
+
+
+                "likes":
+                    0,
+
+
+                "comments":
+                    0,
+
+
+                "boosted":
+                    True,
+
+
+                "boost_level":
+                    1,
+
+
+                "creator":
+                {
+
+                    "username":
+                        row["channel_title"],
+
+
+                    "display_name":
+                        row["channel_title"],
+
+
+                    "verified":
+                        False
+
+                }
+
             }
 
-        })
+        )
 
-    print("YouTube cache videos:", len(rows))
+
+    print(
+        "YOUTUBE CACHE LOADED:",
+        len(videos)
+    )
+
+
     return videos
+
+
+
+# ============================================================
+# CACHE COUNT
+# ============================================================
+
+def youtube_cache_count():
+
+    connection = get_connection()
+
+
+    row = connection.execute(
+        """
+        SELECT COUNT(*) AS total
+
+        FROM youtube_cache
+        """
+    ).fetchone()
+
+
+    connection.close()
+
+
+    return row["total"]
+
+
+
+# ============================================================
+# OWNER REFRESH - ONLY ADD NEW VIDEOS
+# ============================================================
+
+def owner_refresh_youtube(new_videos):
+
+    print(
+        "OWNER REFRESH: ADDING NEW VIDEOS"
+    )
+
+
+    save_youtube_cache(
+        new_videos
+    )
+
+
+    print(
+        "TOTAL CACHE:",
+        youtube_cache_count()
+    )
