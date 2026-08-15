@@ -32,7 +32,8 @@ from database import (
 
 from youtube_cache import (
     save_youtube_cache,
-    get_cached_youtube
+    get_cached_youtube,
+    youtube_cache_count
 )
 
 from auth import (
@@ -2429,6 +2430,20 @@ def videos():
         ""
     ).strip()
 
+    youtube_results = []
+
+    if search:
+
+        print(
+            "SEARCHING YOUTUBE:",
+            search
+        )
+
+        youtube_results = get_youtube_videos(
+            search,
+            10
+        )
+
     connection = get_connection()
 
     if search:
@@ -2623,6 +2638,15 @@ def videos():
             }
 
         })
+
+    # Add YouTube search results
+
+    if youtube_results:
+
+        result.extend(
+            youtube_results
+        )
+
 
     return jsonify({
 
@@ -3548,20 +3572,121 @@ def for_you_feed():
 
     from flask import request
 
+    # ============================================================
+    # YOUTUBE CHANNEL CACHE
+    # ONLY CHANNEL VIDEOS
+    # ============================================================
+
+    channels = [
+
+        "UCicFN5athQLFrfZGlgtaH4Q",
+        "UCVyTlHRwDFhx4REjYR0oP8Q",
+        "UCXga7_DonV8f-ApUq2Du8KQ",
+        "UCjvgGbPPn-FgYeguc5nxG4A",
+        "UC_c-VuxCs5P6wv5dKWk-Mrw",
+
+    ]
+
+
+    # ------------------------------------------------------------
+    # LOAD EXISTING CACHE
+    # ------------------------------------------------------------
+
+    youtube_videos = get_cached_youtube(500)
+
+    print(
+        "EXISTING YOUTUBE CACHE:",
+        len(youtube_videos)
+    )
+
+
+    # ------------------------------------------------------------
+    # OWNER REFRESH
+    # ------------------------------------------------------------
+
     if request.args.get("refresh") == "1":
 
-        print("OWNER REFRESH: CLEARING CACHE")
+        print("================================")
+        print("OWNER YOUTUBE REFRESH")
+        print("================================")
 
-        conn = get_connection()
+        new_videos = []
 
-        conn.execute(
-            "DELETE FROM youtube_cache"
+        for channel in channels:
+
+            print(
+                "FETCHING CHANNEL:",
+                channel
+            )
+
+            try:
+
+                videos = get_channel_videos(
+                    channel,
+                    10
+                )
+
+                print(
+                    "CHANNEL VIDEOS:",
+                    len(videos)
+                )
+
+                new_videos.extend(
+                    videos
+                )
+
+            except Exception as error:
+
+                print(
+                    "CHANNEL ERROR:",
+                    channel,
+                    repr(error)
+                )
+
+
+        print(
+            "TOTAL NEW CHANNEL VIDEOS:",
+            len(new_videos)
         )
 
-        conn.commit()
-        conn.close()
 
-        print("YOUTUBE CACHE CLEARED")
+        # --------------------------------------------------------
+        # SAVE ONLY CHANNEL VIDEOS
+        # --------------------------------------------------------
+
+        if new_videos:
+
+            save_youtube_cache(
+                new_videos
+            )
+
+            print(
+                "CACHE SAVED:"
+            )
+
+        else:
+
+            print(
+                "NO NEW VIDEOS TO SAVE"
+            )
+
+
+        print(
+            "TOTAL CACHE AFTER REFRESH:",
+            youtube_cache_count()
+        )
+
+
+    # ------------------------------------------------------------
+    # LOAD CACHE FOR FEED
+    # ------------------------------------------------------------
+
+    youtube_videos = get_cached_youtube(500)
+
+    print(
+        "FINAL YOUTUBE FEED:",
+        len(youtube_videos)
+    )
 
     
 
@@ -3967,114 +4092,133 @@ def for_you_feed():
 
         topics = [
 
-        "ravi kishan memes",
-        "gaming",
-        "Minecraft",
-        "GTA 5 gameplay",
-        "football highlights",
-        "cricket",
-        "AI technology",
-        "technology news",
-        "science",
-        "space",
-        "coding",
-        "programming",
-        "movies",
-        "music",
-        "funny shorts",
-        "animals",
-        "memes",
-        "education",
-        "fitness",
-        "travel",
-        "free fire",
-        "basketball",
-        "sports",
-
-    ]
-        channels = [
-
-            
-            "UCicFN5athQLFrfZGlgtaH4Q",  # PW
-            "UCVyTlHRwDFhx4REjYR0oP8Q",  #malik
-            "UCXga7_DonV8f-ApUq2Du8KQ",  #aamirextra
+            "ravi kishan memes",
+            "gaming",
+            "Minecraft",
+            "GTA 5 gameplay",
+            "football highlights",
+            "cricket",
+            "AI technology",
+            "technology news",
+            "science",
+            "space",
+            "coding",
+            "programming",
+            "movies",
+            "music",
+            "funny shorts",
+            "animals",
+            "memes",
+            "education",
+            "fitness",
+            "travel",
+            "free fire",
+            "basketball",
+            "sports",
 
         ]
 
 
-    selected_topics = random.sample(
-        topics,
-        2
-    )
+        channels = [
+
+            "UCicFN5athQLFrfZGlgtaH4Q",
+            "UCVyTlHRwDFhx4REjYR0oP8Q",
+            "UCXga7_DonV8f-ApUq2Du8KQ",
+            "UCjvgGbPPn-FgYeguc5nxG4A", #saurav joshi
+            "UC_c-VuxCs5P6wv5dKWk-Mrw", #guru kirpa live
+
+        ]
 
 
-    youtube_videos = get_cached_youtube(150)
-
-    print("YOUTUBE VIDEOS COUNT:", len(youtube_videos))
-    print("YOUTUBE DATA:", youtube_videos[:1])
-
-    print(
-        "CACHE VIDEOS:",
-        len(youtube_videos)
-    )
+        # Load old videos
+        youtube_videos = get_cached_youtube(150)
 
 
-    # Cache empty → fetch from YouTube once
-    if len(youtube_videos) == 0:
+        print(
+            "OLD CACHE VIDEOS:",
+            len(youtube_videos)
+        )
 
-        print("YOUTUBE CACHE EMPTY - FETCHING NOW")
 
-        youtube_videos = []
+        # Add some new videos periodically
+        selected_topics = random.sample(
+            topics,
+            2
+        )
+
+
+        new_videos = []
+
 
         for topic in selected_topics:
 
             videos = get_youtube_videos(
                 topic,
-                1
+                5
             )
 
-            youtube_videos.extend(videos)
+            new_videos.extend(
+                videos
+            )
 
-            print("FETCHED YOUTUBE VIDEOS:", len(youtube_videos))
-
-
-
-        # ADD CHANNEL VIDEOS
 
         for channel in channels:
 
             videos = get_channel_videos(
                 channel,
-                50
+                10
             )
 
-            youtube_videos.extend(videos)
+            new_videos.extend(
+                videos
+            )
 
 
-        save_youtube_cache(
-            youtube_videos
+        print(
+            "NEW VIDEOS FOUND:",
+            len(new_videos)
+        )
+
+
+        # Save new videos without deleting old
+        if new_videos:
+
+            save_youtube_cache(
+                new_videos
+            )
+
+
+        # Reload mixed feed
+        youtube_videos = get_cached_youtube(
+            150
+        )
+
+
+        print(
+            "FINAL YOUTUBE FEED:",
+            len(youtube_videos)
         )
 
     
-
-    print("YOUTUBE VIDEOS ADDED:")
-    for y in youtube_videos:
-        print(
-            y["title"],
-            y["youtube_id"]
-        )
-
-    print(
-        "TOTAL YOUTUBE:",
-        len(youtube_videos)
+    youtube_videos = get_cached_youtube(
+        150
     )
 
-    
+    print(
+        "CACHE FEED:",
+        len(youtube_videos)
+    )
 
 
     result.extend(
         youtube_videos
     )
+    
+
+
+    # result.extend(
+    #     youtube_videos
+    # )
     random.shuffle(result)
 
     return jsonify({
@@ -4089,6 +4233,9 @@ def for_you_feed():
             result
 
     })
+
+
+
 
 
 # ============================================================
