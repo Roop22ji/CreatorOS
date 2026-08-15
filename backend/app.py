@@ -3606,6 +3606,8 @@ def for_you_feed():
             "UCicFN5athQLFrfZGlgtaH4Q",
             "UCVyTlHRwDFhx4REjYR0oP8Q",
             "UCXga7_DonV8f-ApUq2Du8KQ",
+            "UCjvgGbPPn-FgYeguc5nxG4A", #saurav joshi
+            "UC_c-VuxCs5P6wv5dKWk-Mrw", #guru kirpa live
         ]
 
 
@@ -3614,7 +3616,7 @@ def for_you_feed():
 
         selected_topics = random.sample(
             topics,
-            1
+            0
         )
 
 
@@ -3622,7 +3624,7 @@ def for_you_feed():
 
             videos = get_youtube_videos(
                 topic,
-                10
+                0
             )
 
             new_videos.extend(
@@ -4060,33 +4062,7 @@ def for_you_feed():
 
         })
 
-        topics = [
-
-            "ravi kishan memes",
-            "gaming",
-            "Minecraft",
-            "GTA 5 gameplay",
-            "football highlights",
-            "cricket",
-            "AI technology",
-            "technology news",
-            "science",
-            "space",
-            "coding",
-            "programming",
-            "movies",
-            "music",
-            "funny shorts",
-            "animals",
-            "memes",
-            "education",
-            "fitness",
-            "travel",
-            "free fire",
-            "basketball",
-            "sports",
-
-        ]
+      
 
 
         channels = [
@@ -4094,12 +4070,14 @@ def for_you_feed():
             "UCicFN5athQLFrfZGlgtaH4Q",
             "UCVyTlHRwDFhx4REjYR0oP8Q",
             "UCXga7_DonV8f-ApUq2Du8KQ",
+            "UCjvgGbPPn-FgYeguc5nxG4A", #saurav joshi
+            "UC_c-VuxCs5P6wv5dKWk-Mrw", #guru kirpa live
 
         ]
 
 
         # Load old videos
-        youtube_videos = get_cached_youtube(150)
+        youtube_videos = get_cached_youtube(250)
 
 
         print(
@@ -4109,25 +4087,7 @@ def for_you_feed():
 
 
         # Add some new videos periodically
-        selected_topics = random.sample(
-            topics,
-            2
-        )
-
-
-        new_videos = []
-
-
-        for topic in selected_topics:
-
-            videos = get_youtube_videos(
-                topic,
-                5
-            )
-
-            new_videos.extend(
-                videos
-            )
+      
 
 
         for channel in channels:
@@ -4169,7 +4129,7 @@ def for_you_feed():
 
     
     youtube_videos = get_cached_youtube(
-        150
+        250
     )
 
     print(
@@ -4184,9 +4144,9 @@ def for_you_feed():
     
 
 
-    result.extend(
-        youtube_videos
-    )
+    # result.extend(
+    #     youtube_videos
+    # )
     random.shuffle(result)
 
     return jsonify({
