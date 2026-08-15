@@ -3614,24 +3614,6 @@ def for_you_feed():
         new_videos = []
 
 
-        # selected_topics = random.sample(
-        #     topics,
-        #     0
-        # )
-
-
-        # for topic in selected_topics:
-
-        #     videos = get_youtube_videos(
-        #         topic,
-        #         0
-        #     )
-
-        #     new_videos.extend(
-        #         videos
-        #     )
-
-
         for channel in channels:
 
             videos = get_channel_videos(
@@ -3647,7 +3629,6 @@ def for_you_feed():
         save_youtube_cache(
             new_videos
         )
-
 
         print(
             "NEW ADDED:",
