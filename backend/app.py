@@ -4090,114 +4090,114 @@ def for_you_feed():
 
         })
 
-        topics = [
+    topics = [
 
-            "ravi kishan memes",
-            "gaming",
-            "Minecraft",
-            "GTA 5 gameplay",
-            "football highlights",
-            "cricket",
-            "AI technology",
-            "technology news",
-            "science",
-            "space",
-            "coding",
-            "programming",
-            "movies",
-            "music",
-            "funny shorts",
-            "animals",
-            "memes",
-            "education",
-            "fitness",
-            "travel",
-            "free fire",
-            "basketball",
-            "sports",
+        "ravi kishan memes",
+        "gaming",
+        "Minecraft",
+        "GTA 5 gameplay",
+        "football highlights",
+        "cricket",
+        "AI technology",
+        "technology news",
+        "science",
+        "space",
+        "coding",
+        "programming",
+        "movies",
+        "music",
+        "funny shorts",
+        "animals",
+        "memes",
+        "education",
+        "fitness",
+        "travel",
+        "free fire",
+        "basketball",
+        "sports",
 
-        ]
-
-
-        channels = [
-
-            "UCicFN5athQLFrfZGlgtaH4Q",
-            "UCVyTlHRwDFhx4REjYR0oP8Q",
-            "UCXga7_DonV8f-ApUq2Du8KQ",
-            "UCjvgGbPPn-FgYeguc5nxG4A", #saurav joshi
-            "UC_c-VuxCs5P6wv5dKWk-Mrw", #guru kirpa live
-
-        ]
+    ]
 
 
-        # Load old videos
-        youtube_videos = get_cached_youtube(150)
+    channels = [
+
+        "UCicFN5athQLFrfZGlgtaH4Q",
+        "UCVyTlHRwDFhx4REjYR0oP8Q",
+        "UCXga7_DonV8f-ApUq2Du8KQ",
+        "UCjvgGbPPn-FgYeguc5nxG4A", #saurav joshi
+        "UC_c-VuxCs5P6wv5dKWk-Mrw", #guru kirpa live
+
+    ]
 
 
-        print(
-            "OLD CACHE VIDEOS:",
-            len(youtube_videos)
+    # Load old videos
+    youtube_videos = get_cached_youtube(150)
+
+
+    print(
+        "OLD CACHE VIDEOS:",
+        len(youtube_videos)
+    )
+
+
+    # Add some new videos periodically
+    selected_topics = random.sample(
+        topics,
+        2
+    )
+
+
+    new_videos = []
+
+
+    for topic in selected_topics:
+
+        videos = get_youtube_videos(
+            topic,
+            5
+        )
+
+        new_videos.extend(
+            videos
         )
 
 
-        # Add some new videos periodically
-        selected_topics = random.sample(
-            topics,
-            2
+    for channel in channels:
+
+        videos = get_channel_videos(
+            channel,
+            10
+        )
+
+        new_videos.extend(
+            videos
         )
 
 
-        new_videos = []
+    print(
+        "NEW VIDEOS FOUND:",
+        len(new_videos)
+    )
 
 
-        for topic in selected_topics:
+    # Save new videos without deleting old
+    if new_videos:
 
-            videos = get_youtube_videos(
-                topic,
-                5
-            )
-
-            new_videos.extend(
-                videos
-            )
-
-
-        for channel in channels:
-
-            videos = get_channel_videos(
-                channel,
-                10
-            )
-
-            new_videos.extend(
-                videos
-            )
-
-
-        print(
-            "NEW VIDEOS FOUND:",
-            len(new_videos)
+        save_youtube_cache(
+            new_videos
         )
 
 
-        # Save new videos without deleting old
-        if new_videos:
-
-            save_youtube_cache(
-                new_videos
-            )
+    # Reload mixed feed
+    youtube_videos = get_cached_youtube(
+        150
+    )
 
 
-        # Reload mixed feed
-        youtube_videos = get_cached_youtube(
-            150
-        )
-
-
-        print(
-            "FINAL YOUTUBE FEED:",
-            len(youtube_videos)
-        )
+    print(
+        "FINAL YOUTUBE FEED:",
+        len(youtube_videos)
+    )
 
     
     youtube_videos = get_cached_youtube(
