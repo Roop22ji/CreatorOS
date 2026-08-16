@@ -83,13 +83,100 @@ CHANNELS = {
             "https://www.youtube.com/watch?v=I_WXKWgwRvM",
             "https://www.youtube.com/watch?v=VKe2u_tEWVo",
             "https://www.youtube.com/watch?v=ZungsQqN8qQ",
-            "https://www.youtube.com/watch?v=uyXI_xSZ1Lg"
-        
-            
+            "https://www.youtube.com/watch?v=uyXI_xSZ1Lg",
+            "https://www.youtube.com/watch?v=870j2LgScxY",
 
         ]
 
     },
+    
+    "malik family": {
+
+        "channel_title": "Malik Kids",
+
+        "category": "vlogs",
+
+        "videos": [
+
+            "https://www.youtube.com/watch?v=BPF3G_-gLt4",
+            "https://www.youtube.com/watch?v=UdsGGybqQ28",
+            "https://www.youtube.com/watch?v=eaRAG2GtbNM"
+
+        ]
+
+    },
+
+    "mr indian hacker": {
+
+        "channel_title": "Mr Indian Hacker",
+
+        "category": "experiment",
+
+        "videos": [
+
+            "https://www.youtube.com/watch?v=jlQ9K7ORz5Y",
+            "https://www.youtube.com/watch?v=39pST9HAOYU",
+            "https://www.youtube.com/watch?v=zoN9xJW54PE",
+            "https://www.youtube.com/watch?v=NOaLPTzrMMo&list=PLs2q0kQKcqmbVh62oHewVvqNp5ufxhPNK",
+            "https://www.youtube.com/watch?v=O3vmDDTiZao",
+            "https://www.youtube.com/watch?v=XjOOSuQhe8E",
+            "https://www.youtube.com/watch?v=9JdADVvuIjM",
+            "https://www.youtube.com/watch?v=AgZO6yYq6cc",
+
+
+        ]
+
+    },
+    "nikku_vlogs": {
+
+        "channel_title": "Nikku Vlogs",
+
+        "category": "experiment",
+
+        "videos": [
+
+            "https://www.youtube.com/watch?v=A9Jy7LwVtFQ",
+            "https://www.youtube.com/watch?v=A40xn8UfxzY",
+            "https://www.youtube.com/watch?v=58w6QfcLVxs",
+            "https://www.youtube.com/watch?v=RJt9p0QnXQc",
+            "https://www.youtube.com/watch?v=M8PpmZ7-9Ow",
+            "https://www.youtube.com/watch?v=LiFbT_cJ5b0",
+            "https://www.youtube.com/watch?v=0xKW0z7vmg0",
+            "https://www.youtube.com/watch?v=rY4o8t2ymI8",
+
+
+        ]
+
+    },
+    "techno gamerz": {
+
+        "channel_title": "Techno Gamerz",
+
+        "category": "experiment",
+
+        "videos": [
+
+            "https://www.youtube.com/watch?v=YG14X4QDpGo",
+            "https://www.youtube.com/watch?v=N3ySdpmqF9Y&t=4893s",
+            "https://www.youtube.com/watch?v=BE3I2kmzrwg",
+            "https://www.youtube.com/watch?v=97NW_Qcxhh0",
+            "https://www.youtube.com/watch?v=RSm9Su3WtxA",
+            "https://www.youtube.com/watch?v=px9AwXq2_lA",
+            "https://www.youtube.com/watch?v=Z2XKA-wQjac",
+            "https://www.youtube.com/watch?v=n9vED3JsHZ0",
+
+
+        ]
+
+    },
+
+
+
+
+
+
+
+
 
 
 }
