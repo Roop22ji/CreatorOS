@@ -1,174 +1,218 @@
 # ============================================================
 # YOUTUBE CHANNEL MANAGER
-# NO YOUTUBE API
+# NO YOUTUBE DATA API
+#
+# Add channel URLs to CHANNELS.
+#
+# Features:
+#   • Simple channel configuration
+#   • Up to 50 videos per channel
+#   • Automatically mixes all channels
+#   • Supports @handle URLs
+#   • Uses channel page + RSS fallback
 # ============================================================
 
+import re
+import requests
+import xml.etree.ElementTree as ET
+from urllib.parse import urlparse
+
+
+# ============================================================
+# SIMPLE CONFIGURATION
+# ============================================================
 
 CHANNELS = {
 
     "sourav_joshi_vlogs": {
 
-        "channel_title": "Sourav Joshi Vlogs",
+        "channel_url":
+            "https://www.youtube.com/@SouravJoshiVlogs",
 
-        "category": "vlogs",
+        "channel_title":
+            "Sourav Joshi Vlogs",
 
-        "videos": [
-
-            
-            "72XfOlN6hbk"
-            "ozEOf31-d5Y"
-
-        ]
+        "category":
+            "vlogs",
 
     },
 
-    "Amit_extra": {
-
-        "channel_title": "amitextra",
-
-        "category": "gaming",
-
-        "videos": [
-
-            "puRIPW-C1hg"
-            
-
-        ]
-
-    },
 
     "triggered_insaan": {
 
-        "channel_title": "triggered",
+        "channel_url":
+            "https://www.youtube.com/@TriggeredInsaan",
 
-        "category": "gaming",
+        "channel_title":
+            "Triggered Insaan",
 
-        "videos": [
-
-            
-            "g_NaHx4zbuc&t=1933s"
-            "p7coaVdQVWw"
-            
-
-        ]
+        "category":
+            "gaming",
 
     },
-    "random": {
 
-        "channel_title": "random",
 
-        "category": "gaming",
+    # ========================================================
+    # ADD MORE CHANNELS HERE
+    # ========================================================
 
-        "videos": [
-
-            "https://www.youtube.com/watch?v=MPmKAk7mjDo",
-            "https://www.youtube.com/watch?v=b7A3Pbny-7M",
-            "https://www.youtube.com/watch?v=YtO22syoxFg&t=468s",
-            "https://www.youtube.com/watch?v=7xxeWVBOViQ",
-            "https://www.youtube.com/watch?v=zf2iFLkHWP8",
-            "https://www.youtube.com/watch?v=Af6i6ChAVTw",
-            "https://www.youtube.com/watch?v=pzBi1nwDn8U",
-            "https://www.youtube.com/watch?v=MW_q00eHyfY",
-            "https://www.youtube.com/watch?v=YpTgLi1detk",
-            "https://www.youtube.com/watch?v=2znLf_9fPrc",
-            "https://www.youtube.com/watch?v=gLAjowInE6s",
-            "https://www.youtube.com/watch?v=bbHx4M7CAGw",
+    "dimple malhan": {
     
-            "https://www.youtube.com/watch?v=jR6Y4H87Bag",
-            "https://www.youtube.com/watch?v=_pUa1UQEctQ",
-            "https://www.youtube.com/watch?v=q6Do9Qj_cMs",
-            "https://www.youtube.com/watch?v=DdUWrJcE4uI",
-            "https://www.youtube.com/watch?v=kLujv40zGFE",
-            "https://www.youtube.com/watch?v=bnDecJ1X6Wg",
-            "https://www.youtube.com/watch?v=I_WXKWgwRvM",
-            "https://www.youtube.com/watch?v=VKe2u_tEWVo",
-            "https://www.youtube.com/watch?v=ZungsQqN8qQ",
-            "https://www.youtube.com/watch?v=uyXI_xSZ1Lg",
-            "https://www.youtube.com/watch?v=870j2LgScxY",
-
-        ]
-
-    },
+        "channel_url":
+            "https://www.youtube.com/@DimpleMalhanVlogs",
     
-    "malik family": {
-
-        "channel_title": "Malik Kids",
-
-        "category": "vlogs",
-
-        "videos": [
-
-            "https://www.youtube.com/watch?v=BPF3G_-gLt4",
-            "https://www.youtube.com/watch?v=UdsGGybqQ28",
-            "https://www.youtube.com/watch?v=eaRAG2GtbNM"
-
-        ]
-
+        "channel_title":
+            "Dimple malhan",
+    
+        "category":
+            "entertainment",
+    
+    },
+    "fukra insaann": {
+    
+        "channel_url":
+            "https://www.youtube.com/@FukraInsaan",
+    
+        "channel_title":
+            "Fukra Insaan",
+    
+        "category":
+            "entertainment",
+    
     },
 
-    "mr indian hacker": {
-
-        "channel_title": "Mr Indian Hacker",
-
-        "category": "experiment",
-
-        "videos": [
-
-            "https://www.youtube.com/watch?v=jlQ9K7ORz5Y",
-            "https://www.youtube.com/watch?v=39pST9HAOYU",
-            "https://www.youtube.com/watch?v=zoN9xJW54PE",
-            "https://www.youtube.com/watch?v=NOaLPTzrMMo&list=PLs2q0kQKcqmbVh62oHewVvqNp5ufxhPNK",
-            "https://www.youtube.com/watch?v=O3vmDDTiZao",
-            "https://www.youtube.com/watch?v=XjOOSuQhe8E",
-            "https://www.youtube.com/watch?v=9JdADVvuIjM",
-            "https://www.youtube.com/watch?v=AgZO6yYq6cc",
-
-
-        ]
-
+    "Carzy xyz": {
+    
+        "channel_url":
+            "https://www.youtube.com/results?search_query=crazy+xyz",
+    
+        "channel_title":
+            "Crazy XYZ",
+    
+        "category":
+            "entertainment",
+    
     },
-    "nikku_vlogs": {
 
-        "channel_title": "Nikku Vlogs",
-
-        "category": "experiment",
-
-        "videos": [
-
-            "https://www.youtube.com/watch?v=A9Jy7LwVtFQ",
-            "https://www.youtube.com/watch?v=A40xn8UfxzY",
-            "https://www.youtube.com/watch?v=58w6QfcLVxs",
-            "https://www.youtube.com/watch?v=RJt9p0QnXQc",
-            "https://www.youtube.com/watch?v=M8PpmZ7-9Ow",
-            "https://www.youtube.com/watch?v=LiFbT_cJ5b0",
-            "https://www.youtube.com/watch?v=0xKW0z7vmg0",
-            "https://www.youtube.com/watch?v=rY4o8t2ymI8",
-
-
-        ]
-
+    "Mr indian hacker": {
+    
+        "channel_url":
+            "https://www.youtube.com/@MRINDIANHACKER",
+    
+        "channel_title":
+            "Mr Indian Hacker",
+    
+        "category":
+            "experiment",
+    
     },
-    "techno gamerz": {
 
-        "channel_title": "Techno Gamerz",
-
-        "category": "experiment",
-
-        "videos": [
-
-            "https://www.youtube.com/watch?v=YG14X4QDpGo",
-            "https://www.youtube.com/watch?v=N3ySdpmqF9Y&t=4893s",
-            "https://www.youtube.com/watch?v=BE3I2kmzrwg",
-            "https://www.youtube.com/watch?v=97NW_Qcxhh0",
-            "https://www.youtube.com/watch?v=RSm9Su3WtxA",
-            "https://www.youtube.com/watch?v=px9AwXq2_lA",
-            "https://www.youtube.com/watch?v=Z2XKA-wQjac",
-            "https://www.youtube.com/watch?v=n9vED3JsHZ0",
-
-
-        ]
-
+    "amirextra": {
+    
+        "channel_url":
+            "https://www.youtube.com/@AmitExtra2",
+    
+        "channel_title":
+            "Amir Extra",
+    
+        "category":
+            "gaming",
+    
     },
+
+    "anshextra": {
+    
+        "channel_url":
+            "https://www.youtube.com/@anshextra7",
+    
+        "channel_title":
+            "Ansh Extra",
+    
+        "category":
+            "gaming",
+    
+    },
+
+    "Malik kids": {
+    
+        "channel_url":
+            "https://www.youtube.com/@Kritikapayal",
+    
+        "channel_title":
+            "Malik Kids",
+    
+        "category":
+            "gaming",
+    
+    },
+
+    "niku vlogs": {
+    
+        "channel_url":
+            "https://www.youtube.com/@NIkkuVlogz",
+    
+        "channel_title":
+            "Nikku Vlogz",
+    
+        "category":
+            "vlogz",
+    
+    },
+
+    "tam ex": {
+    
+        "channel_url":
+            "https://www.youtube.com/@TAMexOFFISIAL",
+    
+        "channel_title":
+            "TAM EX",
+    
+        "category":
+            "gaming",
+    
+    },
+
+    "techno ": {
+    
+        "channel_url":
+            "https://www.youtube.com/@TechnoGamerzOfficial",
+    
+        "channel_title":
+            "Techno Gamerz",
+    
+        "category":
+            "gaming",
+    
+    },
+
+    "nirankari ": {
+    
+        "channel_url":
+            "https://www.youtube.com/@NirankariOrgUpdates",
+    
+        "channel_title":
+            "SNM",
+    
+        "category":
+            "religious",
+    
+    },
+
+    "coke studio": {
+    
+        "channel_url":
+            "https://www.youtube.com/@cokestudio",
+    
+        "channel_title":
+            "Coke Studio",
+    
+        "category":
+            "songs",
+    
+    },
+
+
+
 
 
 
@@ -182,202 +226,1022 @@ CHANNELS = {
 }
 
 
-def extract_youtube_id(value):
+# ============================================================
+# SETTINGS
+# ============================================================
 
-    """
-    Extract a YouTube video ID from:
+MAX_VIDEOS_PER_CHANNEL = 50
 
-    https://www.youtube.com/watch?v=VIDEO_ID
-    https://youtu.be/VIDEO_ID
-    https://www.youtube.com/embed/VIDEO_ID
+REQUEST_TIMEOUT = 20
 
-    Or accept a raw video ID.
-    """
+USER_AGENT = (
+    "Mozilla/5.0 "
+    "(Windows NT 10.0; Win64; x64) "
+    "AppleWebKit/537.36 "
+    "(KHTML, like Gecko) "
+    "Chrome/120.0 Safari/537.36"
+)
 
-    if not value:
+
+# ============================================================
+# YOUTUBE RSS
+# ============================================================
+
+RSS_URL = (
+    "https://www.youtube.com/feeds/videos.xml"
+    "?channel_id={}"
+)
+
+
+# ============================================================
+# NAMESPACES
+# ============================================================
+
+NAMESPACES = {
+
+    "yt":
+        "http://www.youtube.com/xml/schemas/2015",
+
+    "media":
+        "http://search.yahoo.com/mrss/",
+
+    "atom":
+        "http://www.w3.org/2005/Atom",
+
+}
+
+
+# ============================================================
+# HTTP HEADERS
+# ============================================================
+
+HEADERS = {
+
+    "User-Agent":
+        USER_AGENT,
+
+    "Accept-Language":
+        "en-US,en;q=0.9",
+
+}
+
+
+# ============================================================
+# GET CHANNEL ID
+# ============================================================
+
+def get_channel_id(channel_url):
+
+    if not channel_url:
+
         return None
 
-    value = str(value).strip()
+
+    channel_url = str(
+        channel_url
+    ).strip()
 
 
     # --------------------------------------------------------
-    # Raw YouTube ID
+    # Direct channel ID
     # --------------------------------------------------------
 
-    if (
-        "youtube.com" not in value
-        and
-        "youtu.be" not in value
+    match = re.search(
+        r"/channel/"
+        r"(UC[a-zA-Z0-9_-]{20,})",
+        channel_url
+    )
+
+
+    if match:
+
+        return match.group(1)
+
+
+    # --------------------------------------------------------
+    # Request channel page
+    # --------------------------------------------------------
+
+    try:
+
+        response = requests.get(
+            channel_url,
+            headers=HEADERS,
+            timeout=REQUEST_TIMEOUT
+        )
+
+
+        if response.status_code != 200:
+
+            print(
+                "Channel page failed:",
+                response.status_code
+            )
+
+            return None
+
+
+        html = response.text
+
+
+    except Exception as error:
+
+        print(
+            "Channel request error:",
+            error
+        )
+
+        return None
+
+
+    # --------------------------------------------------------
+    # Search several possible channel ID formats
+    # --------------------------------------------------------
+
+    patterns = [
+
+        r'"channelId":"(UC[a-zA-Z0-9_-]{20,})"',
+
+        r'"externalId":"(UC[a-zA-Z0-9_-]{20,})"',
+
+        r'"browseId":"(UC[a-zA-Z0-9_-]{20,})"',
+
+        r'"channel_id":"(UC[a-zA-Z0-9_-]{20,})"',
+
+        r'"externalChannelId":"(UC[a-zA-Z0-9_-]{20,})"',
+
+    ]
+
+
+    for pattern in patterns:
+
+        match = re.search(
+            pattern,
+            html
+        )
+
+        if match:
+
+            return match.group(1)
+
+
+    return None
+
+
+# ============================================================
+# EXTRACT VIDEO ID
+# ============================================================
+
+def extract_youtube_id(value):
+
+    if not value:
+
+        return None
+
+
+    value = str(
+        value
+    ).strip()
+
+
+    # --------------------------------------------------------
+    # Raw ID
+    # --------------------------------------------------------
+
+    if re.fullmatch(
+        r"[a-zA-Z0-9_-]{11}",
+        value
     ):
 
         return value
 
 
     # --------------------------------------------------------
-    # youtube.com/watch?v=
+    # watch?v=
     # --------------------------------------------------------
 
-    if "watch?v=" in value:
+    match = re.search(
+        r"[?&]v=([a-zA-Z0-9_-]{11})",
+        value
+    )
 
-        video_id = value.split(
-            "watch?v=",
-            1
-        )[1]
+    if match:
 
-        video_id = video_id.split(
-            "&",
-            1
-        )[0]
-
-        return video_id
+        return match.group(1)
 
 
     # --------------------------------------------------------
-    # youtu.be/VIDEO_ID
+    # youtu.be
     # --------------------------------------------------------
 
-    if "youtu.be/" in value:
+    match = re.search(
+        r"youtu\.be/"
+        r"([a-zA-Z0-9_-]{11})",
+        value
+    )
 
-        video_id = value.split(
-            "youtu.be/",
-            1
-        )[1]
+    if match:
 
-        video_id = video_id.split(
-            "?",
-            1
-        )[0]
-
-        video_id = video_id.split(
-            "&",
-            1
-        )[0]
-
-        return video_id
+        return match.group(1)
 
 
     # --------------------------------------------------------
-    # youtube.com/embed/VIDEO_ID
+    # shorts
     # --------------------------------------------------------
 
-    if "/embed/" in value:
+    match = re.search(
+        r"/shorts/"
+        r"([a-zA-Z0-9_-]{11})",
+        value
+    )
 
-        video_id = value.split(
-            "/embed/",
-            1
-        )[1]
+    if match:
 
-        video_id = video_id.split(
-            "?",
-            1
-        )[0]
+        return match.group(1)
 
-        return video_id
+
+    # --------------------------------------------------------
+    # embed
+    # --------------------------------------------------------
+
+    match = re.search(
+        r"/embed/"
+        r"([a-zA-Z0-9_-]{11})",
+        value
+    )
+
+    if match:
+
+        return match.group(1)
 
 
     return None
 
 
-def build_channel_videos():
+# ============================================================
+# EXTRACT VIDEO IDS FROM CHANNEL HTML
+# ============================================================
 
-    """
-    Convert CHANNELS into the format
-    used by YOUTUBE_CATALOG.
-    """
+def extract_video_ids_from_html(html):
 
-    videos = []
+    video_ids = []
+
+    seen = set()
 
 
-    for channel_key, channel in CHANNELS.items():
+    # ========================================================
+    # PATTERN 1
+    # ========================================================
 
-        channel_title = channel.get(
-            "channel_title",
-            "YouTube"
+    patterns = [
+
+        r'"videoId":"([a-zA-Z0-9_-]{11})"',
+
+        r'"videoId":\s*"([a-zA-Z0-9_-]{11})"',
+
+        r'watch\?v=([a-zA-Z0-9_-]{11})',
+
+        r'youtu\.be/([a-zA-Z0-9_-]{11})',
+
+    ]
+
+
+    for pattern in patterns:
+
+        matches = re.findall(
+            pattern,
+            html
         )
 
-        category = channel.get(
-            "category",
-            "general"
-        )
 
-        video_list = channel.get(
-            "videos",
-            []
-        )
+        for video_id in matches:
 
-
-        for video_number, value in enumerate(
-            video_list,
-            start=1
-        ):
-
-            youtube_id = extract_youtube_id(
-                value
-            )
-
-
-            if not youtube_id:
+            if video_id in seen:
 
                 continue
 
 
-            videos.append({
+            seen.add(
+                video_id
+            )
 
-                "id":
-                    youtube_id,
+            video_ids.append(
+                video_id
+            )
 
-                "youtube_id":
-                    youtube_id,
 
-                "title":
-                    f"{channel_title} Video {video_number}",
+            if len(video_ids) >= MAX_VIDEOS_PER_CHANNEL:
 
-                "description":
-                    "",
+                return video_ids
 
-                "category":
-                    category,
 
-                "thumbnail":
-                    (
-                        "https://img.youtube.com/vi/"
-                        +
-                        youtube_id
-                        +
-                        "/hqdefault.jpg"
-                    ),
+    return video_ids
 
-                "channel_title":
+
+# ============================================================
+# LOAD VIDEOS FROM CHANNEL PAGE
+# ============================================================
+
+def load_channel_page_videos(
+    channel_url,
+    channel_key,
+    channel_config
+):
+
+    print(
+        "Trying channel page..."
+    )
+
+
+    try:
+
+        response = requests.get(
+            channel_url,
+            headers=HEADERS,
+            timeout=REQUEST_TIMEOUT
+        )
+
+
+        if response.status_code != 200:
+
+            print(
+                "Channel page status:",
+                response.status_code
+            )
+
+            return []
+
+
+        html = response.text
+
+
+    except Exception as error:
+
+        print(
+            "Channel page error:",
+            error
+        )
+
+        return []
+
+
+    video_ids = extract_video_ids_from_html(
+        html
+    )
+
+
+    print(
+        "VIDEO IDS FOUND FROM PAGE:",
+        len(video_ids)
+    )
+
+
+    videos = []
+
+
+    channel_title = channel_config.get(
+        "channel_title",
+        channel_key
+    )
+
+
+    category = channel_config.get(
+        "category",
+        "general"
+    )
+
+
+    for number, youtube_id in enumerate(
+        video_ids,
+        start=1
+    ):
+
+        videos.append({
+
+            "id":
+                youtube_id,
+
+            "youtube_id":
+                youtube_id,
+
+            "title":
+                f"{channel_title} Video {number}",
+
+            "description":
+                "",
+
+            "category":
+                category,
+
+            "thumbnail":
+                (
+                    "https://i.ytimg.com/vi/"
+                    +
+                    youtube_id
+                    +
+                    "/hqdefault.jpg"
+                ),
+
+            "video_url":
+                (
+                    "https://www.youtube.com/embed/"
+                    +
+                    youtube_id
+                ),
+
+            "youtube_url":
+                (
+                    "https://www.youtube.com/watch?v="
+                    +
+                    youtube_id
+                ),
+
+            "channel_title":
+                channel_title,
+
+            "views":
+                0,
+
+            "likes":
+                0,
+
+            "comments":
+                0,
+
+            "created_at":
+                0,
+
+            "source":
+                "youtube",
+
+            "creator": {
+
+                "username":
+                    channel_key,
+
+                "display_name":
                     channel_title,
 
-                "views":
-                    0,
+                "avatar":
+                    "",
 
-                "likes":
-                    0,
+                "verified":
+                    True
 
-                "comments":
-                    0,
+            }
 
-                "created_at":
-                    0,
-
-                "creator": {
-
-                    "username":
-                        channel_key,
-
-                    "display_name":
-                        channel_title,
-
-                    "avatar":
-                        "",
-
-                    "verified":
-                        True
-                }
-
-            })
+        })
 
 
     return videos
+
+
+# ============================================================
+# LOAD RSS
+# ============================================================
+
+def load_channel_rss(
+    channel_id,
+    channel_key,
+    channel_config
+):
+
+    if not channel_id:
+
+        return []
+
+
+    url = RSS_URL.format(
+        channel_id
+    )
+
+
+    try:
+
+        response = requests.get(
+            url,
+            headers=HEADERS,
+            timeout=REQUEST_TIMEOUT
+        )
+
+
+        if response.status_code != 200:
+
+            print(
+                "RSS failed:",
+                response.status_code
+            )
+
+            return []
+
+
+        root = ET.fromstring(
+            response.content
+        )
+
+
+    except Exception as error:
+
+        print(
+            "RSS error:",
+            error
+        )
+
+        return []
+
+
+    channel_title = channel_config.get(
+        "channel_title",
+        channel_key
+    )
+
+
+    category = channel_config.get(
+        "category",
+        "general"
+    )
+
+
+    videos = []
+
+
+    entries = root.findall(
+        "atom:entry",
+        NAMESPACES
+    )
+
+
+    for entry in entries:
+
+        if len(videos) >= MAX_VIDEOS_PER_CHANNEL:
+
+            break
+
+
+        # ----------------------------------------------------
+        # VIDEO ID
+        # ----------------------------------------------------
+
+        video_element = entry.find(
+            "yt:videoId",
+            NAMESPACES
+        )
+
+
+        if (
+            video_element is None
+            or not video_element.text
+        ):
+
+            continue
+
+
+        youtube_id = (
+            video_element.text.strip()
+        )
+
+
+        # ----------------------------------------------------
+        # TITLE
+        # ----------------------------------------------------
+
+        title_element = entry.find(
+            "atom:title",
+            NAMESPACES
+        )
+
+
+        if (
+            title_element is not None
+            and title_element.text
+        ):
+
+            title = (
+                title_element.text.strip()
+            )
+
+        else:
+
+            title = "YouTube Video"
+
+
+        # ----------------------------------------------------
+        # PUBLISHED
+        # ----------------------------------------------------
+
+        published_element = entry.find(
+            "atom:published",
+            NAMESPACES
+        )
+
+
+        if (
+            published_element is not None
+            and published_element.text
+        ):
+
+            published = (
+                published_element.text
+            )
+
+        else:
+
+            published = ""
+
+
+        # ----------------------------------------------------
+        # DESCRIPTION
+        # ----------------------------------------------------
+
+        description = ""
+
+
+        media_group = entry.find(
+            "media:group",
+            NAMESPACES
+        )
+
+
+        if media_group is not None:
+
+            description_element = (
+                media_group.find(
+                    "media:description",
+                    NAMESPACES
+                )
+            )
+
+
+            if (
+                description_element is not None
+                and description_element.text
+            ):
+
+                description = (
+                    description_element.text.strip()
+                )
+
+
+        # ----------------------------------------------------
+        # VIDEO
+        # ----------------------------------------------------
+
+        videos.append({
+
+            "id":
+                youtube_id,
+
+            "youtube_id":
+                youtube_id,
+
+            "title":
+                title,
+
+            "description":
+                description,
+
+            "category":
+                category,
+
+            "thumbnail":
+                (
+                    "https://i.ytimg.com/vi/"
+                    +
+                    youtube_id
+                    +
+                    "/hqdefault.jpg"
+                ),
+
+            "video_url":
+                (
+                    "https://www.youtube.com/embed/"
+                    +
+                    youtube_id
+                ),
+
+            "youtube_url":
+                (
+                    "https://www.youtube.com/watch?v="
+                    +
+                    youtube_id
+                ),
+
+            "channel_title":
+                channel_title,
+
+            "views":
+                0,
+
+            "likes":
+                0,
+
+            "comments":
+                0,
+
+            "created_at":
+                published,
+
+            "source":
+                "youtube",
+
+            "creator": {
+
+                "username":
+                    channel_key,
+
+                "display_name":
+                    channel_title,
+
+                "avatar":
+                    "",
+
+                "verified":
+                    True
+
+            }
+
+        })
+
+
+    return videos
+
+
+# ============================================================
+# LOAD ONE CHANNEL
+# ============================================================
+
+def load_one_channel(
+    channel_key,
+    channel_config
+):
+
+    channel_url = channel_config.get(
+        "channel_url"
+    )
+
+
+    channel_title = channel_config.get(
+        "channel_title",
+        channel_key
+    )
+
+
+    print()
+    print(
+        "========================================"
+    )
+
+    print(
+        "CHANNEL:",
+        channel_title
+    )
+
+    print(
+        "URL:",
+        channel_url
+    )
+
+
+    # ========================================================
+    # FIRST: CHANNEL PAGE
+    # ========================================================
+
+    videos = load_channel_page_videos(
+        channel_url,
+        channel_key,
+        channel_config
+    )
+
+
+    # ========================================================
+    # GET CHANNEL ID
+    # ========================================================
+
+    channel_id = get_channel_id(
+        channel_url
+    )
+
+
+    if channel_id:
+
+        print(
+            "CHANNEL ID:",
+            channel_id
+        )
+
+    else:
+
+        print(
+            "CHANNEL ID NOT FOUND"
+        )
+
+
+    # ========================================================
+    # RSS FALLBACK
+    # ========================================================
+
+    if len(videos) < MAX_VIDEOS_PER_CHANNEL:
+
+        print(
+            "Channel page returned",
+            len(videos),
+            "videos."
+        )
+
+        print(
+            "Trying RSS fallback..."
+        )
+
+
+        rss_videos = load_channel_rss(
+            channel_id,
+            channel_key,
+            channel_config
+        )
+
+
+        existing_ids = {
+
+            video.get(
+                "youtube_id"
+            )
+
+            for video in videos
+
+        }
+
+
+        for video in rss_videos:
+
+            youtube_id = video.get(
+                "youtube_id"
+            )
+
+
+            if youtube_id in existing_ids:
+
+                continue
+
+
+            videos.append(
+                video
+            )
+
+
+            existing_ids.add(
+                youtube_id
+            )
+
+
+            if len(videos) >= MAX_VIDEOS_PER_CHANNEL:
+
+                break
+
+
+    # ========================================================
+    # FINAL LIMIT
+    # ========================================================
+
+    videos = videos[
+        :MAX_VIDEOS_PER_CHANNEL
+    ]
+
+
+    print(
+        "FINAL VIDEOS:",
+        len(videos)
+    )
+
+
+    return videos
+
+
+# ============================================================
+# BUILD ALL CHANNEL VIDEOS
+# ============================================================
+
+def build_channel_videos():
+
+    """
+    Load every configured channel.
+
+    Then mix them evenly using round-robin.
+
+    Example with 3 channels:
+
+        Channel A #1
+        Channel B #1
+        Channel C #1
+
+        Channel A #2
+        Channel B #2
+        Channel C #2
+
+        Channel A #3
+        Channel B #3
+        Channel C #3
+    """
+
+    channel_lists = []
+
+
+    print()
+    print()
+    print("========================================")
+    print("       YOUTUBE CHANNEL MANAGER")
+    print("========================================")
+    print(
+        "CHANNELS:",
+        len(CHANNELS)
+    )
+    print(
+        "MAX PER CHANNEL:",
+        MAX_VIDEOS_PER_CHANNEL
+    )
+    print("========================================")
+
+
+    # ========================================================
+    # LOAD EVERY CHANNEL
+    # ========================================================
+
+    for channel_key, channel_config in CHANNELS.items():
+
+        videos = load_one_channel(
+            channel_key,
+            channel_config
+        )
+
+
+        if videos:
+
+            channel_lists.append(
+                videos
+            )
+
+
+    # ========================================================
+    # EVEN MIX
+    # ========================================================
+
+    mixed_videos = []
+
+
+    position = 0
+
+
+    while channel_lists:
+
+        if position >= len(channel_lists):
+
+            position = 0
+
+
+        queue = channel_lists[
+            position
+        ]
+
+
+        if queue:
+
+            video = queue.pop(0)
+
+            mixed_videos.append(
+                video
+            )
+
+
+        # ----------------------------------------------------
+        # Remove empty channel
+        # ----------------------------------------------------
+
+        if not queue:
+
+            channel_lists.pop(
+                position
+            )
+
+        else:
+
+            position += 1
+
+
+    # ========================================================
+    # RESULT
+    # ========================================================
+
+    print()
+    print("========================================")
+    print("YOUTUBE MIX COMPLETE")
+    print("========================================")
+
+    print(
+        "TOTAL MIXED VIDEOS:",
+        len(mixed_videos)
+    )
+
+    print(
+        "========================================")
+
+
+    return mixed_videos
