@@ -14,7 +14,7 @@ CHANNELS = {
 
         "videos": [
 
-            "7UU-oODb0jE"
+            
             "72XfOlN6hbk"
             "ozEOf31-d5Y"
 
@@ -45,7 +45,7 @@ CHANNELS = {
 
         "videos": [
 
-            "fyPt7sowHIQ&t=67s"
+            
             "g_NaHx4zbuc&t=1933s"
             "p7coaVdQVWw"
             
